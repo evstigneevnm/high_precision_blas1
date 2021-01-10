@@ -1,0 +1,1 @@
+LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/noctum/Documents/Programs/High_def_opers/gmp/install/lib
