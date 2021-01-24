@@ -29,10 +29,10 @@ struct timer_event
     virtual double  elapsed_time(const timer_event &e0)const = 0;
     virtual void    release() = 0;
 
-    /*~timer_event()
-    {
-        release();
-    }*/
+    // ~timer_event()
+    // {
+    //     release();
+    // }
 };
 
 }

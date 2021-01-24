@@ -7,6 +7,7 @@
 #include <vector>
 #include <atomic>
 #include <mutex>
+#include <memory>
 #include <iostream>
 
 template<class T, class T_vec>
@@ -33,6 +34,8 @@ public:
             dot_naive.emplace_back(array_bounds[j], array_bounds[j+1]);
             dot_ogita.emplace_back(array_bounds[j], array_bounds[j+1]);
         }
+        g_lock_sp = std::make_shared<std::mutex>();
+
     }
     ~threaded_dot_prod()
     {
@@ -45,7 +48,7 @@ private:
         dot_product_naive(int begin_, int end_): begin(begin_), end(end_){}
         ~dot_product_naive(){}
         
-        void operator ()(const T_vec& x_, const T_vec& y_, T& result_, std::mutex& g_lock_)
+        void operator ()(const T_vec& x_, const T_vec& y_, T& result_, std::shared_ptr<std::mutex> g_lock_)
         {
 
             T partial_sum = 0;
@@ -53,9 +56,9 @@ private:
             {
                 partial_sum += x_[i] * y_[i];
             }
-            g_lock_.lock();
+            
+            std::lock_guard<std::mutex> lock(*g_lock_);
             result_ = result_ + partial_sum;
-            g_lock_.unlock();
         }    
     private:
         int begin;
@@ -69,7 +72,7 @@ private:
         dot_product_ogita(int begin_, int end_): begin(begin_), end(end_){}
         ~dot_product_ogita(){}
         
-        void operator ()(const T_vec& x_, const T_vec& y_, T& result_, accumulators& sigma_, std::mutex& g_lock_)
+        void operator ()(const T_vec& x_, const T_vec& y_, T& result_, accumulators& sigma_, std::shared_ptr<std::mutex> g_lock_)
         {
 
             T s = T(0.0), c = T(0.0), p = T(0.0);
@@ -82,12 +85,10 @@ private:
                 c = c + pi + t;
             }
             
-            g_lock_.lock();
+            std::lock_guard<std::mutex> lock(*g_lock_);
             result_ = two_sum(t, T(result_), s);
             sigma_.first = two_sum(pi, T(sigma_.first), c);
             sigma_.second = T(sigma_.second) + t + pi;
-            g_lock_.unlock();
-
 
         }    
     private:
@@ -127,11 +128,11 @@ public:
             
             if(use_dot_prod == 0)
             {
-                threads.push_back( std::thread( std::ref(dot_naive[j]),  std::ref(x_),  std::ref(y_),  std::ref(result), std::ref(g_lock) ) );
+                threads.push_back( std::thread( std::ref(dot_naive[j]),  std::ref(x_),  std::ref(y_),  std::ref(result), g_lock_sp) );
             }
             else if(use_dot_prod == 1)
             {
-                threads.push_back( std::thread( std::ref(dot_ogita[j]),  std::ref(x_),  std::ref(y_),  std::ref(result), std::ref(sigma), std::ref(g_lock) ) );
+                threads.push_back( std::thread( std::ref(dot_ogita[j]),  std::ref(x_),  std::ref(y_),  std::ref(result), std::ref(sigma), g_lock_sp) );
             }
             else
             {
@@ -153,11 +154,7 @@ public:
         }
         else
         {
-            // std::cout.precision(20);
-            // std::cout << std::scientific << result << " " << sigma.first << " " << sigma.second << std::endl;            
-            
             return T(result) + T(sigma.first) + T(sigma.second);
-            // return T(result);
         }
     }
 
@@ -170,7 +167,9 @@ private:
     std::vector<dot_product_naive> dot_naive;
     std::vector<dot_product_ogita> dot_ogita;
     accumulators sigma;
-    std::mutex g_lock;
+    
+    std::shared_ptr<std::mutex> g_lock_sp;
+
 
     void bounds()
     {

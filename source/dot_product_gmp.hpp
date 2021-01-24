@@ -10,11 +10,12 @@
 #include <../gmp/install/include/gmpxx.h>
 
 
-template<class T>
+template<class T, class T_vec>
 class dot_product_gmp
 {
 private:
-    T *X, *Y;
+    T_vec X;
+    T_vec Y;
     bool array_set = false;
     unsigned int exact_prec_bits;
     size_t N;
@@ -32,12 +33,11 @@ private:
         return p;
     }
 
-    T two_sum (T &t, T a, T b) 
+    T two_sum(T &t, T a, T b) const
     {
         T s = a+b;
-        T bs = s-a;
-        T as = s-bs;
-        t = (b-bs) + (a-as);
+        T z = s-a;
+        t = a-(s-z)+b-z;
         return s;
     }
 
@@ -52,7 +52,7 @@ public:
     {
     }
 
-    void set_arrays(size_t N_, T*& input_array_1_, T*& input_array_2_)
+    void set_arrays(size_t N_, T_vec& input_array_1_, T_vec& input_array_2_)
     {
 
         X = input_array_1_;
