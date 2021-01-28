@@ -67,7 +67,7 @@ struct cpu_vector_operations
         
         return true;
     }
-    scalar_type scalar_prod(const vector_type &x, const vector_type &y)const
+    scalar_type scalar_prod(const vector_type &x, const vector_type &y, int use_high_prec_ = -1)const
     {
         // T res(0.f);
         // for (int i = 0;i < sz_;++i)
@@ -75,6 +75,15 @@ struct cpu_vector_operations
         //     res += x[i]*y[i];
         // }        
         // return res;
+        if(use_high_prec_ == 1)
+        {
+            dot->use_high_prec();
+        }
+        if(use_high_prec_ == 0)
+        {
+            dot->use_normal_prec();
+        }
+
         return dot->dot(x, y);
     }
     scalar_type norm(const vector_type &x)const

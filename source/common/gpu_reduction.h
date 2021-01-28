@@ -7,18 +7,6 @@
 #include <utils/cuda_support.h>
 
 
-#if __DEVICE_EMULATION__
-#define __GPU_REDUCTION_H__DEBUG_SYNC __syncthreads();
-#else
-#define __GPU_REDUCTION_H__DEBUG_SYNC
-#endif
-
-#if (__CUDA_ARCH__ < 200)
-#define __GPU_REDUCTION_H__int_mult(x,y)	__mul24(x,y)	
-#else
-#define __GPU_REDUCTION_H__int_mult(x,y)	x*y
-#endif
-
 #define __GPU_REDUCTION_H__inf 0x7f800000 
 
 

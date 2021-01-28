@@ -210,6 +210,21 @@ struct gpu_vector_operations
     {
         cuBLAS->dot<scalar_type>(sz, x, y, result);
     }
+
+    scalar_type absolute_sum(const vector_type &x)const
+    {
+        scalar_type result;
+        cuBLAS->asum<scalar_type>(sz, x, &result);    
+        
+        return (result);
+    }
+    void absolute_sum(const vector_type &x, scalar_type *result)
+    {
+        cuBLAS->asum<scalar_type>(sz, x, &result);
+    }
+
+    
+    
     //Observe, that for complex type we need template spetialization! vector type is compelx, but norm type is real!
     //for *PU pointer storage with call from *PU
     Tsc norm(const vector_type &x)const

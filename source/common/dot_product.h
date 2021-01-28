@@ -23,14 +23,14 @@ private:
         return p;
     }
     
-    T two_sum(T &t, T a, T b) const
+    T two_sum_back(T &t, T a, T b) const
     {
         T s = a+b;
         T z = s-a;
         t = a-(s-z)+b-z;
         return s;
     }
-    T two_sum_back(T &t, T a, T b) const
+    T two_sum(T &t, T a, T b) const
     {
         T s = a+b;
         T bs = s-a;
@@ -51,7 +51,14 @@ public:
     {
     }
   
-
+    void use_high_prec()
+    {
+        use_ogita = 1;
+    }
+    void use_normal_prec()
+    {
+        use_ogita = 0;
+    }
 
   
     T dot_naive(const T* X, const T* Y) const

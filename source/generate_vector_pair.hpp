@@ -67,11 +67,12 @@ public:
     T generate(T_vec& x_, T_vec& y_, T condition_number_, int use_exact_dot_cuda_ = 0)
     {
         T b = std::log2(condition_number_);
-        // we take the last 100 elements or a half at most
+        // we take the last X elements or a half at most
         // it is needed to adjust the vectors to the appropriate condition number
-        int size_exp = std::max( 200, int(b) );
+        int X = 2000;
+        int size_exp = std::max( X, int(0.5*b) );
         size_t N_fix_part = std::min( size_exp, int(std::round(0.5*sz)) ); 
-        
+
         T b_step = 0.5*b/T(N_fix_part);
         T b_val = 0.5*b;
 
@@ -83,13 +84,13 @@ public:
             exp_fixed[j] = x_part_c[j];
         }
 
-        vec_ops->assign_random(rand_exponent_d, T(0.0), T(0.5*b) );
+        vec_ops->assign_random(rand_exponent_d, T(0.0), b_val );
         host_2_device_cpy<T>(&rand_exponent_d[sz - N_fix_part], x_part_c, N_fix_part);
         vec_ops->assign_random(rand_mantisa_d, T(-1.0), T(1.0) );
 
         vec_helper->generate_C_estimated_vector(b_val, rand_mantisa_d, rand_exponent_d, x_, N_fix_part);
 
-        vec_ops->assign_random(rand_exponent_d, T(0), T(0.5*b) );
+        vec_ops->assign_random(rand_exponent_d, T(0), b_val );
         vec_ops->assign_random(rand_mantisa_d, T(-1.0), T(1.0) );
         vec_helper->generate_C_estimated_vector(b_val, rand_mantisa_d, rand_exponent_d, y_, N_fix_part);
 
@@ -100,7 +101,7 @@ public:
         for( int j = 0; j<N_fix_part; j++)
         {
             
-            T dot_xy = reduction->dot(x_, y_);
+            T dot_xy = dot(x_, y_); //local dot product!!!
             T y_l = (y_part_c[j]*std::pow<T>(T(2.0), exp_fixed[j]) - dot_xy)/x_part_c[j];
             vec_ops->set_value_at_point(y_l, sz - N_fix_part + j, y_);
         }
@@ -110,7 +111,7 @@ public:
         delete [] y_part_c;
         delete [] x_part_c;
 
-        T condition_estimate = estimate_condition(x_, y_);
+        T condition_estimate = estimate_condition_blas(x_, y_);
         return condition_estimate;
     }
 
@@ -132,12 +133,34 @@ private:
     vec_helper_t* vec_helper = nullptr;
 
 
-    T estimate_condition(T_vec x1_, T_vec x2_)
+    T estimate_condition_reduction(T_vec x1_, T_vec x2_)
     {
         T x1_s = std::abs( reduction->sum(x1_) );
         T x2_s = std::abs( reduction->sum(x2_) );
         T x1x2 = std::abs( reduction->dot(x1_, x2_) );
         return(x1_s*x2_s/x1x2);
+    }
+
+    T estimate_condition_blas(T_vec x1_, T_vec x2_)
+    {
+        T x1_s = vec_ops->absolute_sum(x1_);
+        T x2_s = vec_ops->absolute_sum(x2_);
+        T x1x2 = std::abs( vec_ops->scalar_prod(x1_, x2_) );
+        return(x1_s*x2_s/x1x2);
+    }
+
+    inline T dot(T_vec d1, T_vec d2)
+    {
+        return( dot_blas(d1, d2) );
+    }
+    inline T dot_reduction(T_vec d1, T_vec d2)
+    {
+        retunr( vec_ops->scalar_prod(d1, d2) );
+    }
+
+    inline T dot_blas(T_vec d1, T_vec d2)
+    {
+        return( reduction->dot(d1, d2) );
     }
 
     T dot_exact(T_vec d1, T_vec d2)

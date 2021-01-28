@@ -41,6 +41,16 @@ public:
     {
 
     }
+
+    void use_high_prec()
+    {
+        use_dot_prod = 1;
+    }
+    void use_normal_prec()
+    {
+        use_dot_prod = 0;
+    }
+
 private:
     class dot_product_naive
     {
@@ -78,6 +88,7 @@ private:
             T s = T(0.0), c = T(0.0), p = T(0.0);
             pi = T(0.0);
             t = T(0.0);
+            T qq = T(0.0);
             for (int j=begin; j<end; j++) 
             {
                 p = two_prod(pi, x_[j], y_[j]);
@@ -86,9 +97,10 @@ private:
             }
             
             std::lock_guard<std::mutex> lock(*g_lock_);
+            
             result_ = two_sum(t, T(result_), s);
-            sigma_.first = two_sum(pi, T(sigma_.first), c);
-            sigma_.second = T(sigma_.second) + t + pi;
+            sigma_.first = two_sum(qq, T(sigma_.first), c);
+            sigma_.second = T(sigma_.second) + t + qq;
 
         }    
     private:
@@ -107,8 +119,9 @@ private:
         T two_sum(T &t, T a, T b) const
         {
             T s = a+b;
-            T z = s-a;
-            t = a-(s-z)+b-z;
+            T bs = s-a;
+            T as = s-bs;
+            t = (b-bs) + (a-as);
             return s;
         }
     };
@@ -139,7 +152,7 @@ public:
                 throw std::logic_error("Incorrect dot product scheme selected");
             }
 
-
+            
         }
 
         for(auto &t : threads)

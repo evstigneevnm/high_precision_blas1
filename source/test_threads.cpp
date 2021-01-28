@@ -62,10 +62,10 @@ int main(int argc, char const *argv[])
     T check_d = dp_check.dot_ogita(vec1_d, vec2_d);
     T check_o = dp_check.dot_naive(vec1_d, vec2_d);
 
-    dot_product_gmp<T, std::vector<T>> dp_ref(512);
+    dot_product_gmp<T, std::vector<T>> dp_ref(256);
     dp_ref.set_arrays(vec_size, vec1_v, vec2_v);
     T ref_exact = dp_ref.dot_exact();
-    T error_exact = dp_ref.get_error(res_d);
+    T error_exact = dp_ref.get_error_relative_T(res_d);
 
 
     std::cout.precision(24);

@@ -9,22 +9,22 @@ __device__ void warp_reduce_max( volatile T smem[64])
 {
 
     smem[threadIdx.x] = smem[threadIdx.x+32] > smem[threadIdx.x] ? 
-                        smem[threadIdx.x+32] : smem[threadIdx.x]; __GPU_REDUCTION_H__DEBUG_SYNC;
+                        smem[threadIdx.x+32] : smem[threadIdx.x];
 
     smem[threadIdx.x] = smem[threadIdx.x+16] > smem[threadIdx.x] ? 
-                        smem[threadIdx.x+16] : smem[threadIdx.x]; __GPU_REDUCTION_H__DEBUG_SYNC;
+                        smem[threadIdx.x+16] : smem[threadIdx.x];
 
     smem[threadIdx.x] = smem[threadIdx.x+8] > smem[threadIdx.x] ? 
-                        smem[threadIdx.x+8] : smem[threadIdx.x]; __GPU_REDUCTION_H__DEBUG_SYNC;
+                        smem[threadIdx.x+8] : smem[threadIdx.x];
 
     smem[threadIdx.x] = smem[threadIdx.x+4] > smem[threadIdx.x] ? 
-                        smem[threadIdx.x+4] : smem[threadIdx.x]; __GPU_REDUCTION_H__DEBUG_SYNC;
+                        smem[threadIdx.x+4] : smem[threadIdx.x];
 
     smem[threadIdx.x] = smem[threadIdx.x+2] > smem[threadIdx.x] ? 
-                        smem[threadIdx.x+2] : smem[threadIdx.x]; __GPU_REDUCTION_H__DEBUG_SYNC;
+                        smem[threadIdx.x+2] : smem[threadIdx.x];
 
     smem[threadIdx.x] = smem[threadIdx.x+1] > smem[threadIdx.x] ? 
-                        smem[threadIdx.x+1] : smem[threadIdx.x]; __GPU_REDUCTION_H__DEBUG_SYNC;
+                        smem[threadIdx.x+1] : smem[threadIdx.x];
 
 }
 
@@ -33,22 +33,22 @@ __device__ void warp_reduce_min( volatile T smem[64])
 {
 
     smem[threadIdx.x] = smem[threadIdx.x+32] < smem[threadIdx.x] ? 
-                        smem[threadIdx.x+32] : smem[threadIdx.x]; __GPU_REDUCTION_H__DEBUG_SYNC;
+                        smem[threadIdx.x+32] : smem[threadIdx.x];
 
     smem[threadIdx.x] = smem[threadIdx.x+16] < smem[threadIdx.x] ? 
-                        smem[threadIdx.x+16] : smem[threadIdx.x]; __GPU_REDUCTION_H__DEBUG_SYNC;
+                        smem[threadIdx.x+16] : smem[threadIdx.x];
 
     smem[threadIdx.x] = smem[threadIdx.x+8] < smem[threadIdx.x] ? 
-                        smem[threadIdx.x+8] : smem[threadIdx.x]; __GPU_REDUCTION_H__DEBUG_SYNC;
+                        smem[threadIdx.x+8] : smem[threadIdx.x];
 
     smem[threadIdx.x] = smem[threadIdx.x+4] < smem[threadIdx.x] ? 
-                        smem[threadIdx.x+4] : smem[threadIdx.x]; __GPU_REDUCTION_H__DEBUG_SYNC;
+                        smem[threadIdx.x+4] : smem[threadIdx.x];
 
     smem[threadIdx.x] = smem[threadIdx.x+2] < smem[threadIdx.x] ? 
-                        smem[threadIdx.x+2] : smem[threadIdx.x]; __GPU_REDUCTION_H__DEBUG_SYNC;
+                        smem[threadIdx.x+2] : smem[threadIdx.x];
 
     smem[threadIdx.x] = smem[threadIdx.x+1] < smem[threadIdx.x] ? 
-                        smem[threadIdx.x+1] : smem[threadIdx.x]; __GPU_REDUCTION_H__DEBUG_SYNC;
+                        smem[threadIdx.x+1] : smem[threadIdx.x];
 
 }
 
@@ -76,7 +76,7 @@ __global__ void find_min_max_dynamic_kernel(const T_vec in, T_vec out, int n, in
         min = resval < min ? resval : min;
         max = resval > max ? resval : max;
 
-        mult = __GPU_REDUCTION_H__int_mult(i,threads_r);
+        mult = (i*threads_r);
     }
 
     // previously reduced MIN part
@@ -88,7 +88,7 @@ __global__ void find_min_max_dynamic_kernel(const T_vec in, T_vec out, int n, in
 
         min = resval < min ? resval : min;
         
-        mult = __GPU_REDUCTION_H__int_mult(i,threads_r);
+        mult = (i*threads_r);
     }
 
     // MAX part
@@ -98,7 +98,7 @@ __global__ void find_min_max_dynamic_kernel(const T_vec in, T_vec out, int n, in
 
         max = resval > max ? resval : max;
         
-        mult = __GPU_REDUCTION_H__int_mult(i,threads_r);
+        mult = (i*threads_r);
     }
 
 

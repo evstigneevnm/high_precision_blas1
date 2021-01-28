@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
+#include <iomanip>
 #include <cmath>
 #include <../gmp/install/include/gmpxx.h>
 
@@ -78,6 +79,10 @@ public:
         return T(dot_exact_T);
     }
     
+    void print_res()
+    {
+        std::cout << std::scientific << std::setprecision(128) << s_m << std::endl;
+    }
 
     T get_error(const T& approx_res_)
     {
@@ -87,6 +92,27 @@ public:
         double err_d = err_m.get_d();
         return std::abs(T(err_d));
     }
+    T get_error_T(const T& approx_res_)
+    {
+
+        double err_d = approx_res_ - s_m.get_d();
+        
+        return std::abs(T(err_d));
+    }
+    T get_error_relative(const T& approx_res_)
+    {
+        mpf_class dot_v_m(approx_res_, exact_prec_bits);
+        mpf_class err_m = (dot_v_m - s_m)/s_m;
+        
+        double err_d = err_m.get_d();
+        return std::abs(T(err_d));
+    }    
+    T get_error_relative_T(const T& approx_res_)
+    {
+        double err_d = (approx_res_ - s_m.get_d())/s_m.get_d();
+        
+        return std::abs(T(err_d));
+    }      
 };
 
 #endif

@@ -59,7 +59,7 @@ int main(int argc, char const *argv[])
     T *u1_c;
     T *u2_c;
     
-    dot_exact_t dp_ref(4096);
+    dot_exact_t dp_ref(1024);
 
     g_vecs.init_vector(u1_d); g_vecs.init_vector(u2_d); g_vecs.init_vector(u3_d);
     g_vecs.start_use_vector(u1_d); g_vecs.start_use_vector(u2_d); g_vecs.start_use_vector(u3_d);
@@ -68,17 +68,18 @@ int main(int argc, char const *argv[])
 
 
     printf("using vectors of size = %i\n", vec_size);
-    //g_vecs.assign_scalar(T(2.0e-5), u1_d);
-    //g_vecs.assign_scalar(T(2.0e-5), u2_d);
-    g_vecs.assign_random(u1_d, T(-100), T(100));
-    g_vecs.assign_random(u2_d, T(-100), T(100));
+    g_vecs.assign_scalar(T(1.0f/300), u1_d);
+    g_vecs.assign_scalar(T(1.0f/300), u2_d);
+    // printf("num = %.24le \n", T(1.0f/3) );
+    // g_vecs.assign_random(u1_d, T(-100.0f), T(100.0f) );
+    // g_vecs.assign_random(u2_d, T(-100.0f), T(100.0f) );
     // g_vecs.assign_random(u3_d);
 
-    g_vecs.assign_scalar(T(0.0),u3_d);
+    g_vecs.assign_scalar(T(0.0), u3_d);
     g_vecs.set_value_at_point(T(-120.0), 1234, u3_d);
     g_vecs.set_value_at_point(T(120.0), vec_size/2, u3_d);
 
-    min_max_t min_max = reduction.min_max(u1_d);
+    min_max_t min_max = reduction.min_max(u3_d);
     printf("min = %lf, max = %lf \n", min_max.first, min_max.second);
     T sum = reduction.sum(u1_d);
     printf("sum = %lf \n", sum);
@@ -140,12 +141,14 @@ int main(int argc, char const *argv[])
         printf("dot_C = %.24le, time_wall = %lf ms\n", double(dot_prod_2), double(elapsed_mseconds) );
         
         T ref_exact = dp_ref.dot_exact();
-        T error_exact_L = dp_ref.get_error(dot_prod_1);
-        T error_exact_G = dp_ref.get_error(dot_prod_3);
-        T error_exact_C = dp_ref.get_error(dot_prod_2);
-        T error_exact_C_th = dp_ref.get_error(dot_prod_C_th);
+        T error_exact_L = dp_ref.get_error_T(dot_prod_1);
+        T error_exact_G = dp_ref.get_error_T(dot_prod_3);
+        T error_exact_C = dp_ref.get_error_T(dot_prod_2);
+        T error_exact_C_th = dp_ref.get_error_T(dot_prod_C_th);
 
-        printf("ref   = %.24le\n", double(ref_exact));        
+        printf("ref   = ");
+        dp_ref.print_res();       
+        printf("ref   = %.24le\n", double(ref_exact)); 
         printf("mantisa:_.123456789123456789\n");
         printf("err_L = %.24le; err_G = %.24le; err_Ct = %.24le; err_C = %.24le\n", double(error_exact_L), double(error_exact_G), double(error_exact_C_th), double(error_exact_C) );
     }
