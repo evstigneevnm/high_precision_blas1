@@ -75,11 +75,9 @@ __device__ inline T __GPU_REDUCTION_OGITA_H__two_sum_device(T &t, T a, T b)
 template <class T, class T_vec, unsigned int blockSize, bool nIsPow2>
 __global__ void reduce_sum_ogita_kernel(const T_vec g_idata, T_vec g_odata, int n)
 {
-//    T *sdata = __GPU_REDUCTION_OGITA_H__SharedMemory<T>();
-//    T *cdata = __GPU_REDUCTION_OGITA_H__SharedMemory<T>();
+    T *sdata = __GPU_REDUCTION_OGITA_H__SharedMemory<T>();
+    T *cdata = &__GPU_REDUCTION_OGITA_H__SharedMemory<T>()[blockSize];
 
-    __shared__ T sdata[1024]; //testing
-    __shared__ T cdata[1024];
 
     // perform first level of reduction,
     // reading from global memory, writing to shared memory
@@ -276,8 +274,8 @@ __global__ void reduce_sum_ogita_kernel(const T_vec g_idata, T_vec g_odata, int 
     // write result for this block to global mem
     if (tid == 0)
     {
-        g_odata[blockIdx.x] =  cdata[0];
-       //printf("%le,%le\n", sdata[0], cdata[0] );
+        g_odata[blockIdx.x] =  sdata[0] + cdata[0];
+    //printf("%le,%le\n", sdata[0], cdata[0] );
     }
 }
 
@@ -407,7 +405,7 @@ void gpu_reduction_ogita<T, T_vec, BLOCK_SIZE, threads_r>::get_blocks_threads_sh
 
     threads = (n < BLOCK_SIZE*2) ? nextPow2((n + 1)/ 2) : BLOCK_SIZE;
     blocks = (n + (threads * 2 - 1)) / (threads * 2);
-    smemSize = (threads <= 32) ? 2 * threads * sizeof(T) : threads * sizeof(T);
+    smemSize = (threads <= 32) ? 2*2 * threads * sizeof(T) : 2*threads * sizeof(T);
     blocks = (maxBlocks>blocks) ? blocks : maxBlocks;
 
 }
@@ -552,7 +550,7 @@ T gpu_reduction_ogita<T, T_vec, BLOCK_SIZE, threads_r>::reduction_sum(int N, con
 {
     T gpu_result=0.0;
     int threads = 0, blocks = 0, smemSize=0;
-    int maxBlocks=1024;//DEBUG
+    int maxBlocks=BLOCK_SIZE;//DEBUG
     get_blocks_threads_shmem(N, maxBlocks, blocks, threads, smemSize);
 
     //perform reduction
