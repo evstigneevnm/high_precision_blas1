@@ -23,13 +23,6 @@ private:
         return p;
     }
     
-    T two_sum_back(T &t, T a, T b) const
-    {
-        T s = a+b;
-        T z = s-a;
-        t = a-(s-z)+b-z;
-        return s;
-    }
     T two_sum(T &t, T a, T b) const
     {
         T s = a+b;

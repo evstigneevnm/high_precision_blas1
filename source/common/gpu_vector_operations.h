@@ -194,7 +194,6 @@ struct gpu_vector_operations
         check_file << std::scientific << std::setprecision(16) << x_host[sz-1];
         check_file.close();
     }
-
     //DEBUG ENDS!
 
     bool check_is_valid_number(const vector_type &x)const;
@@ -211,16 +210,19 @@ struct gpu_vector_operations
         cuBLAS->dot<scalar_type>(sz, x, y, result);
     }
 
-    scalar_type absolute_sum(const vector_type &x)const
+    
+    typedef typename cublas_real_types::cublas_real_type_hlp<T>::type redef_type;
+    redef_type absolute_sum(const vector_type &x)const
     {
-        scalar_type result;
+
+        redef_type result;
         cuBLAS->asum<scalar_type>(sz, x, &result);    
         
         return (result);
     }
-    void absolute_sum(const vector_type &x, scalar_type *result)
+    void absolute_sum(const vector_type &x, redef_type *result)
     {
-        cuBLAS->asum<scalar_type>(sz, x, &result);
+        cuBLAS->asum<scalar_type>(sz, x, result);
     }
 
     

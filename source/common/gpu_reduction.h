@@ -47,10 +47,14 @@ public:
 
     T sum(const T_vec d_in)
     {
-        T res = reduction_sum(vec_size, d_in, vec_helper_d, vec_helper);
+        T res = reduction_sum(vec_size, d_in, vec_helper_d, vec_helper, false);
         return res;
     }
-
+    T asum(const T_vec d_in)
+    {
+        T res = reduction_sum(vec_size, d_in, vec_helper_d, vec_helper, true);
+        return res;
+    }
     T dot(const T_vec d1_in, const T_vec d2_in)
     {
         T res = reduction_dot(vec_size, d1_in, d2_in, vec_helper_d, vec_helper);
@@ -66,7 +70,7 @@ private:
 
     void compute_reduction_min_max(const T_vec d_in, T_vec vec_helper_d, int num_el);
 
-    T reduction_sum(int num_el, const T_vec InputV, T_vec OutputV, T_vec Output);
+    T reduction_sum(int num_el, const T_vec InputV, T_vec OutputV, T_vec Output, bool use_abs_);
     
     T reduction_dot(int N, const T_vec InputV1, const T_vec InputV2, T_vec OutputV, T_vec Output);
 
@@ -88,6 +92,7 @@ private:
     }
     void get_blocks_threads_shmem(int n, int maxBlocks, int& blocks, int& threads, int& smemSize);
     void wrapper_reduce_sum(int blocks, int threads, int smemSize, const T_vec InputV, T_vec OutputV, int N);
+    void wrapper_reduce_asum(int blocks, int threads, int smemSize, const T_vec InputV, T_vec OutputV, int N);    
     void wrapper_reduce_dot(int blocks, int threads, int smemSize, const T_vec InputV1, const T_vec InputV2, T_vec OutputV, int N);
 
 };

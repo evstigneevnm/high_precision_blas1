@@ -274,8 +274,7 @@ private:
                 break;
             default:
                 // invalid operation code throw
-                throw std::runtime_error("switch_operation_real: invalid code for original or transpose operations. Only 'N' or 'T' are defined.");
-                break;                   
+                throw std::runtime_error("switch_operation_real: invalid code for original or transpose operations. Only 'N' or 'T' are defined.");                   
         }  
         return operation;
 
@@ -296,8 +295,7 @@ private:
                 break;    
             default:
                 // invalid operation code throw
-                throw std::runtime_error("switch_operation_complex: invalid code for original or transpose operations. Only 'N' or 'T' (for Hermitian transpose) are defined.");                
-                break;                              
+                throw std::runtime_error("switch_operation_complex: invalid code for original or transpose operations. Only 'N' or 'T' (for Hermitian transpose) are defined.");                                           
         }  
         return operation;
 

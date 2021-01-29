@@ -11,6 +11,7 @@
 #include <common/cpu_vector_operations.h>
 #include <common/threaded_dot_product.h>
 #include <dot_product_gmp.hpp>
+#include <sum_gmp.hpp>
 #include <common/gpu_reduction.h>
 #include <generate_vector_pair.hpp>
 #include <chrono>
@@ -26,6 +27,7 @@ int main(int argc, char const *argv[])
     using gpu_reduction_t = gpu_reduction<T, T_vec>;
     using min_max_t = gpu_reduction_t::min_max_t;
     using dot_exact_t = dot_product_gmp<T, T_vec>;
+    using sum_exact_t = sum_gmp<T, T_vec>;
     using generate_vector_pair_t = generate_vector_pair<gpu_vector_operations_t, dot_exact_t, gpu_reduction_t>;
     using threaded_dot_t = threaded_dot_prod<T, T_vec>;
 
@@ -53,13 +55,17 @@ int main(int argc, char const *argv[])
     gpu_reduction_t reduction(vec_size);
     threaded_dot_t threaded_dot(vec_size, -1, dot_prod_type);
 
+    unsigned int exact_bits = 1024;
+    dot_exact_t dp_ref(exact_bits);
+    sum_exact_t s_ref(exact_bits);
+
     T *u1_d;
     T *u2_d;
     T *u3_d;
     T *u1_c;
     T *u2_c;
     
-    dot_exact_t dp_ref(1024);
+
 
     g_vecs.init_vector(u1_d); g_vecs.init_vector(u2_d); g_vecs.init_vector(u3_d);
     g_vecs.start_use_vector(u1_d); g_vecs.start_use_vector(u2_d); g_vecs.start_use_vector(u3_d);
@@ -68,36 +74,30 @@ int main(int argc, char const *argv[])
 
 
     printf("using vectors of size = %i\n", vec_size);
-    g_vecs.assign_scalar(T(1.0f/300), u1_d);
-    g_vecs.assign_scalar(T(1.0f/300), u2_d);
-    // printf("num = %.24le \n", T(1.0f/3) );
-    // g_vecs.assign_random(u1_d, T(-100.0f), T(100.0f) );
-    // g_vecs.assign_random(u2_d, T(-100.0f), T(100.0f) );
-    // g_vecs.assign_random(u3_d);
-
     g_vecs.assign_scalar(T(0.0), u3_d);
     g_vecs.set_value_at_point(T(-120.0), 1234, u3_d);
     g_vecs.set_value_at_point(T(120.0), vec_size/2, u3_d);
 
-    min_max_t min_max = reduction.min_max(u3_d);
-    printf("min = %lf, max = %lf \n", min_max.first, min_max.second);
-    T sum = reduction.sum(u1_d);
-    printf("sum = %lf \n", sum);
-    printf("mean= %lf \n", sum/T(vec_size));
+    // min_max_t min_max = reduction.min_max(u3_d);
+    // printf("min = %lf, max = %lf \n", min_max.first, min_max.second);
+    // T sum = reduction.sum(u1_d);
+    // printf("sum = %lf \n", sum);
+    // printf("mean= %lf \n", sum/T(vec_size));
 
     generate_vector_pair_t generator(&g_vecs, &dp_ref, &reduction);
     T cond_estimste = generator.generate(u1_d, u2_d, cond_number_);
     printf("condition estimate = %le\n", cond_estimste);
     
     T norm_u1 = g_vecs.norm(u1_d);
-    printf("||u1||= %.24le\n", double(norm_u1));
-    
+    T norm_u2 = g_vecs.norm(u2_d);
+    printf("||u1|| = %.24le, ||u2|| = %.24le \n", double(norm_u1), double(norm_u2) );
     cudaEvent_t start, stop;
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
 
     cudaEventRecord(start); 
     T dot_prod_1 = g_vecs.scalar_prod(u1_d, u2_d);
+    cudaDeviceSynchronize();
     cudaEventRecord(stop);
     cudaEventSynchronize(stop);
     float milliseconds = 0;
@@ -118,7 +118,21 @@ int main(int argc, char const *argv[])
     T elapsed_mseconds = std::chrono::duration<double, std::milli>(finish_ch - start_ch).count();
 
     printf("dot_G = %.24le, time = %f ms, time_wall = %lf ms\n", double(dot_prod_3), milliseconds, elapsed_mseconds);
+    printf("\n");
+    //sum reduction
+    start_ch = std::chrono::steady_clock::now();
+    T sum_L = g_vecs.absolute_sum(u1_d);
+    finish_ch = std::chrono::steady_clock::now();
+    elapsed_mseconds = std::chrono::duration<double, std::milli>(finish_ch - start_ch).count();
+    printf("asum_L = %.24le, time_wall = %lf ms\n", double(sum_L), elapsed_mseconds);
+    start_ch = std::chrono::steady_clock::now();
+    T sum_G = reduction.asum(u1_d);
+    finish_ch = std::chrono::steady_clock::now();
+    elapsed_mseconds = std::chrono::duration<double, std::milli>(finish_ch - start_ch).count();
+    printf("asum_G = %.24le, time_wall = %lf ms\n", double(sum_G), elapsed_mseconds);
 
+    printf("\n");
+    // save to host 
     g_vecs.get(u1_d, u1_c);
     g_vecs.get(u2_d, u2_c);
 
@@ -127,6 +141,10 @@ int main(int argc, char const *argv[])
     finish_ch = std::chrono::steady_clock::now();
     elapsed_mseconds = std::chrono::duration<double, std::milli>(finish_ch - start_ch).count();
     printf("dot_Ct= %.24le, time_wall = %lf ms\n", double(dot_prod_C_th), double(elapsed_mseconds) );
+
+
+
+
 
     if(use_ref)
     {

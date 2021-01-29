@@ -47,13 +47,17 @@ vec_kern1:
 reduction_kern:
 	$(NVCC) $(NVCCFLAGS) $(IPROJECT) source/common/gpu_reduction_kernels.cu -c -o ./cuda_reduction_kers.o
 
+reduction_ogita_kern:
+	$(NVCC) $(NVCCFLAGS) $(IPROJECT) source/common/testing/gpu_reduction_ogita_kernels.cu -c -o ./cuda_reduction_ogita_kers.o
+
+
 helper_kern:
 	$(NVCC) $(NVCCFLAGS) $(IPROJECT) source/generate_vector_pair_kernels_helper.cu -c -o ./cuda_helper_kers.o
 
 vec_D:
-	$(NVCC) $(GCCFLAGS_RN) $(DTYPE) $(IPROJECT) $(ICUDA) $(IGMP) source/test_vector_operations.cpp $(LGMP) $(LCUDA) $(LIBS2)  gpu_vec_kers.o cuda_dot_prod.o cuda_reduction_kers.o cuda_helper_kers.o -o test_vector_operations.bin
+	$(NVCC) $(GCCFLAGS_RN) $(DTYPE) $(IPROJECT) $(ICUDA) $(IGMP) source/test_vector_operations.cpp $(LGMP) $(LCUDA) $(LIBS2)  gpu_vec_kers.o cuda_dot_prod.o cuda_reduction_kers.o cuda_helper_kers.o cuda_reduction_ogita_kers.o -o test_vector_operations.bin
 vec_F:
-	$(NVCC) $(GCCFLAGS_RN) $(FTYPE) $(IPROJECT) $(ICUDA) $(IGMP) source/test_vector_operations.cpp $(LGMP) $(LCUDA) $(LIBS2)  gpu_vec_kers.o cuda_dot_prod.o cuda_reduction_kers.o cuda_helper_kers.o -o test_vector_operations.bin
+	$(NVCC) $(GCCFLAGS_RN) $(FTYPE) $(IPROJECT) $(ICUDA) $(IGMP) source/test_vector_operations.cpp $(LGMP) $(LCUDA) $(LIBS2)  gpu_vec_kers.o cuda_dot_prod.o cuda_reduction_kers.o cuda_helper_kers.o cuda_reduction_ogita_kers.o -o test_vector_operations.bin
 bench_D:
 	$(NVCC) $(GCCFLAGS_RN) $(DTYPE) $(IPROJECT) $(ICUDA) $(IGMP) source/obtain_condition_precision.cpp $(LGMP) $(LCUDA) $(LIBS2)  gpu_vec_kers.o cuda_dot_prod.o cuda_reduction_kers.o cuda_helper_kers.o -o benchmark.bin
 bench_F:

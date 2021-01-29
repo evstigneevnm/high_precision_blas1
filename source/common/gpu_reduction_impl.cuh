@@ -4,6 +4,9 @@
 #include <common/gpu_reduction.h>
 
 
+namespace gpu_reduction_impl_gpu_kernels
+{
+
 template<class T>
 __device__ void warp_reduce_max( volatile T smem[64])
 {
@@ -179,6 +182,8 @@ __global__ void find_min_max_kernel(const T_vec in, T_vec out)
 
 }
 
+} //namespace
+
 template<class T, class T_vec, int BLOCK_SIZE, int threads_r>
 void gpu_reduction<T, T_vec, BLOCK_SIZE, threads_r>::findBlockSize(int* whichSize, int num_el)
 {
@@ -202,6 +207,10 @@ void gpu_reduction<T, T_vec, BLOCK_SIZE, threads_r>::findBlockSize(int* whichSiz
 
 }
 
+
+
+
+
 template<class T, class T_vec, int BLOCK_SIZE, int threads_r>
 void gpu_reduction<T, T_vec, BLOCK_SIZE, threads_r>::compute_reduction_min_max(const T_vec d_in, T_vec d_out, int num_els)
 {
@@ -219,21 +228,23 @@ void gpu_reduction<T, T_vec, BLOCK_SIZE, threads_r>::compute_reduction_min_max(c
 
     
     if(whichSize == 1)
-        find_min_max_kernel<T, T_vec, BLOCK_SIZE, threads_r><<< num_blocks, threads_r>>>(d_in, d_out); 
+        gpu_reduction_impl_gpu_kernels::find_min_max_kernel<T, T_vec, BLOCK_SIZE, threads_r><<< num_blocks, threads_r>>>(d_in, d_out); 
     else if(whichSize == 2)
-        find_min_max_kernel<T, T_vec, BLOCK_SIZE*2, threads_r><<< num_blocks, threads_r>>>(d_in, d_out); 
+        gpu_reduction_impl_gpu_kernels::find_min_max_kernel<T, T_vec, BLOCK_SIZE*2, threads_r><<< num_blocks, threads_r>>>(d_in, d_out); 
     else if(whichSize == 3)
-        find_min_max_kernel<T, T_vec, BLOCK_SIZE*4, threads_r><<< num_blocks, threads_r>>>(d_in, d_out); 
+        gpu_reduction_impl_gpu_kernels::find_min_max_kernel<T, T_vec, BLOCK_SIZE*4, threads_r><<< num_blocks, threads_r>>>(d_in, d_out); 
     else if(whichSize == 4)
-        find_min_max_kernel<T, T_vec, BLOCK_SIZE*8, threads_r><<< num_blocks, threads_r>>>(d_in, d_out); 
+        gpu_reduction_impl_gpu_kernels::find_min_max_kernel<T, T_vec, BLOCK_SIZE*8, threads_r><<< num_blocks, threads_r>>>(d_in, d_out); 
     else
-        find_min_max_kernel<T, T_vec, BLOCK_SIZE*16, threads_r><<< num_blocks, threads_r>>>(d_in, d_out); 
+        gpu_reduction_impl_gpu_kernels::find_min_max_kernel<T, T_vec, BLOCK_SIZE*16, threads_r><<< num_blocks, threads_r>>>(d_in, d_out); 
 
-    find_min_max_dynamic_kernel<T, T_vec, threads_r><<< 1, threads_r>>>(d_in, d_out, num_els, start_adr, num_blocks);
+    gpu_reduction_impl_gpu_kernels::find_min_max_dynamic_kernel<T, T_vec, threads_r><<< 1, threads_r>>>(d_in, d_out, num_els, start_adr, num_blocks);
     
 }
 
 
+namespace gpu_reduction_impl_gpu_kernels
+{
 //specializaton due to compiler error: declaration is incompatible with previous "__smem" in 'T=double'
 template<class T>
 struct __GPU_REDUCTION_H__SharedMemory
@@ -280,6 +291,139 @@ struct __GPU_REDUCTION_H__SharedMemory<float>
         return (float *)__smem_f;
     }
 };
+
+template<class T>
+__device__ T inline cuda_abs(T val)
+{
+}
+template<>
+__device__ double inline cuda_abs(double val)
+{
+    return( fabs(val) );
+}
+template<>
+__device__ float inline cuda_abs(float val)
+{
+    return( fabsf(val) );
+}
+
+
+template <class T, class T_vec, unsigned int blockSize, bool nIsPow2>
+__global__ void reduce_asum_kernel(const T_vec g_idata, T_vec g_odata, int n)
+{
+    T *sdata = __GPU_REDUCTION_H__SharedMemory<T>();
+
+    // perform first level of reduction,
+    // reading from global memory, writing to shared memory
+    unsigned int tid = threadIdx.x;
+    unsigned int i = blockIdx.x*blockSize*2 + threadIdx.x;
+    unsigned int gridSize = blockSize*2*gridDim.x;
+
+    T mySum = T(0.0);
+
+    // we reduce multiple elements per thread.  The number is determined by the
+    // number of active thread blocks (via gridDim).  More blocks will result
+    // in a larger gridSize and therefore fewer elements per thread
+    while (i < n)
+    {
+        mySum += cuda_abs<T>(g_idata[i]);
+
+        // ensure we don't read out of bounds -- this is optimized away for powerOf2 sized arrays
+        if (nIsPow2 || i + blockSize < n)
+            mySum += cuda_abs<T>(g_idata[i+blockSize]);
+
+        i += gridSize;
+    }
+
+    // each thread puts its local sum into shared memory
+    sdata[tid] = mySum;
+    __syncthreads();
+
+
+    // do reduction in shared mem
+    if (blockSize >= 1024)
+    {
+        if (tid < 512)
+        {
+            sdata[tid] = mySum = mySum + sdata[tid + 512];
+        }
+
+        __syncthreads();
+    }
+    if (blockSize >= 512)
+    {
+        if (tid < 256)
+        {
+            sdata[tid] = mySum = mySum + sdata[tid + 256];
+        }
+
+        __syncthreads();
+    }
+
+    if (blockSize >= 256)
+    {
+        if (tid < 128)
+        {
+            sdata[tid] = mySum = mySum + sdata[tid + 128];
+        }
+
+        __syncthreads();
+    }
+
+    if (blockSize >= 128)
+    {
+        if (tid <  64)
+        {
+            sdata[tid] = mySum = mySum + sdata[tid +  64];
+        }
+
+        __syncthreads();
+    }
+
+    if (tid < 32)
+    {
+        // now that we are using warp-synchronous programming (below)
+        // we need to declare our shared memory volatile so that the compiler
+        // doesn't reorder stores to it and induce incorrect behavior.
+        volatile T *smem = sdata;
+
+        if (blockSize >=  64)
+        {
+            smem[tid] = mySum = mySum + smem[tid + 32];
+        }
+
+        if (blockSize >=  32)
+        {
+            smem[tid] = mySum = mySum + smem[tid + 16];
+        }
+
+        if (blockSize >=  16)
+        {
+            smem[tid] = mySum = mySum + smem[tid +  8];
+        }
+
+        if (blockSize >=   8)
+        {
+            smem[tid] = mySum = mySum + smem[tid +  4];
+        }
+
+        if (blockSize >=   4)
+        {
+            smem[tid] = mySum = mySum + smem[tid +  2];
+        }
+
+        if (blockSize >=   2)
+        {
+            smem[tid] = mySum = mySum + smem[tid +  1];
+        }
+    }
+
+    // write result for this block to global mem
+    if (tid == 0)
+    {
+        g_odata[blockIdx.x] = sdata[0];
+    }
+}
 
 
 template <class T, class T_vec, unsigned int blockSize, bool nIsPow2>
@@ -516,6 +660,9 @@ __global__ void reduce_dot_kernel(const T_vec g_idata1, const T_vec g_idata2, T_
     }
 }
 
+} //namespace
+
+
 template<class T, class T_vec, int BLOCK_SIZE, int threads_r>
 void gpu_reduction<T, T_vec, BLOCK_SIZE, threads_r>::get_blocks_threads_shmem(int n, int maxBlocks, int &blocks, int &threads, int &smemSize)
 {
@@ -540,27 +687,27 @@ void gpu_reduction<T, T_vec, BLOCK_SIZE, threads_r>::wrapper_reduce_sum(int bloc
         switch (threads)
         {
             case 1024:
-                reduce_sum_kernel<T, T_vec, 1024, true><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
+                gpu_reduction_impl_gpu_kernels::reduce_sum_kernel<T, T_vec, 1024, true><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
             case 512:
-                reduce_sum_kernel<T, T_vec, 512, true><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
+                gpu_reduction_impl_gpu_kernels::reduce_sum_kernel<T, T_vec, 512, true><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
             case 256:
-                reduce_sum_kernel<T, T_vec, 256, true><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
+                gpu_reduction_impl_gpu_kernels::reduce_sum_kernel<T, T_vec, 256, true><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
             case 128:
-                reduce_sum_kernel<T, T_vec, 128, true><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
+                gpu_reduction_impl_gpu_kernels::reduce_sum_kernel<T, T_vec, 128, true><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
             case 64:
-                reduce_sum_kernel<T, T_vec, 64, true><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
+                gpu_reduction_impl_gpu_kernels::reduce_sum_kernel<T, T_vec, 64, true><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
             case 32:
-                reduce_sum_kernel<T, T_vec, 32, true><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
+                gpu_reduction_impl_gpu_kernels::reduce_sum_kernel<T, T_vec, 32, true><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
             case 16:
-                reduce_sum_kernel<T, T_vec, 16, true><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
+                gpu_reduction_impl_gpu_kernels::reduce_sum_kernel<T, T_vec, 16, true><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
             case  8:
-                reduce_sum_kernel<T, T_vec, 8, true><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
+                gpu_reduction_impl_gpu_kernels::reduce_sum_kernel<T, T_vec, 8, true><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
             case  4:
-                reduce_sum_kernel<T, T_vec, 4, true><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
+                gpu_reduction_impl_gpu_kernels::reduce_sum_kernel<T, T_vec, 4, true><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
             case  2:
-                reduce_sum_kernel<T, T_vec, 2, true><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
+                gpu_reduction_impl_gpu_kernels::reduce_sum_kernel<T, T_vec, 2, true><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
             case  1:
-                reduce_sum_kernel<T, T_vec, 1, true><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
+                gpu_reduction_impl_gpu_kernels::reduce_sum_kernel<T, T_vec, 1, true><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
             }       
     }
     else
@@ -568,27 +715,92 @@ void gpu_reduction<T, T_vec, BLOCK_SIZE, threads_r>::wrapper_reduce_sum(int bloc
         switch (threads)
         {
             case 1024:
-                reduce_sum_kernel<T, T_vec, 1024, false><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
+                gpu_reduction_impl_gpu_kernels::reduce_sum_kernel<T, T_vec, 1024, false><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
             case 512:
-                reduce_sum_kernel<T, T_vec, 512, false><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
+                gpu_reduction_impl_gpu_kernels::reduce_sum_kernel<T, T_vec, 512, false><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
             case 256:
-                reduce_sum_kernel<T, T_vec, 256, false><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
+                gpu_reduction_impl_gpu_kernels::reduce_sum_kernel<T, T_vec, 256, false><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
             case 128:
-                reduce_sum_kernel<T, T_vec, 128, false><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
+                gpu_reduction_impl_gpu_kernels::reduce_sum_kernel<T, T_vec, 128, false><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
             case 64:
-                reduce_sum_kernel<T, T_vec, 64, false><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
+                gpu_reduction_impl_gpu_kernels::reduce_sum_kernel<T, T_vec, 64, false><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
             case 32:
-                reduce_sum_kernel<T, T_vec, 32, false><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
+                gpu_reduction_impl_gpu_kernels::reduce_sum_kernel<T, T_vec, 32, false><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
             case 16:
-                reduce_sum_kernel<T, T_vec, 16, false><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
+                gpu_reduction_impl_gpu_kernels::reduce_sum_kernel<T, T_vec, 16, false><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
             case  8:
-                reduce_sum_kernel<T, T_vec, 8, false><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
+                gpu_reduction_impl_gpu_kernels::reduce_sum_kernel<T, T_vec, 8, false><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
             case  4:
-                reduce_sum_kernel<T, T_vec, 4, false><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
+                gpu_reduction_impl_gpu_kernels::reduce_sum_kernel<T, T_vec, 4, false><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
             case  2:
-                reduce_sum_kernel<T, T_vec, 2, false><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
+                gpu_reduction_impl_gpu_kernels::reduce_sum_kernel<T, T_vec, 2, false><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
             case  1:
-                reduce_sum_kernel<T, T_vec, 1, false><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
+                gpu_reduction_impl_gpu_kernels::reduce_sum_kernel<T, T_vec, 1, false><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
+        }       
+    }
+        
+}
+
+template<class T, class T_vec, int BLOCK_SIZE, int threads_r>
+void gpu_reduction<T, T_vec, BLOCK_SIZE, threads_r>::wrapper_reduce_asum(int blocks, int threads, int smemSize, const T_vec InputV, T_vec OutputV, int N)
+{
+
+    dim3 dimBlock(threads, 1, 1);
+    dim3 dimGrid(blocks, 1, 1);
+    if(isPow2(N))
+    {
+        switch (threads)
+        {
+            case 1024:
+                gpu_reduction_impl_gpu_kernels::reduce_asum_kernel<T, T_vec, 1024, true><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
+            case 512:
+                gpu_reduction_impl_gpu_kernels::reduce_asum_kernel<T, T_vec, 512, true><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
+            case 256:
+                gpu_reduction_impl_gpu_kernels::reduce_asum_kernel<T, T_vec, 256, true><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
+            case 128:
+                gpu_reduction_impl_gpu_kernels::reduce_asum_kernel<T, T_vec, 128, true><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
+            case 64:
+                gpu_reduction_impl_gpu_kernels::reduce_asum_kernel<T, T_vec, 64, true><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
+            case 32:
+                gpu_reduction_impl_gpu_kernels::reduce_asum_kernel<T, T_vec, 32, true><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
+            case 16:
+                gpu_reduction_impl_gpu_kernels::reduce_asum_kernel<T, T_vec, 16, true><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
+            case  8:
+                gpu_reduction_impl_gpu_kernels::reduce_asum_kernel<T, T_vec, 8, true><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
+            case  4:
+                gpu_reduction_impl_gpu_kernels::reduce_asum_kernel<T, T_vec, 4, true><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
+            case  2:
+                gpu_reduction_impl_gpu_kernels::reduce_asum_kernel<T, T_vec, 2, true><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
+            case  1:
+                gpu_reduction_impl_gpu_kernels::reduce_asum_kernel<T, T_vec, 1, true><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
+            }       
+    }
+    else
+    {
+        switch (threads)
+        {
+            case 1024:
+                gpu_reduction_impl_gpu_kernels::reduce_asum_kernel<T, T_vec, 1024, false><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
+            case 512:
+                gpu_reduction_impl_gpu_kernels::reduce_asum_kernel<T, T_vec, 512, false><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
+            case 256:
+                gpu_reduction_impl_gpu_kernels::reduce_asum_kernel<T, T_vec, 256, false><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
+            case 128:
+                gpu_reduction_impl_gpu_kernels::reduce_asum_kernel<T, T_vec, 128, false><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
+            case 64:
+                gpu_reduction_impl_gpu_kernels::reduce_asum_kernel<T, T_vec, 64, false><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
+            case 32:
+                gpu_reduction_impl_gpu_kernels::reduce_asum_kernel<T, T_vec, 32, false><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
+            case 16:
+                gpu_reduction_impl_gpu_kernels::reduce_asum_kernel<T, T_vec, 16, false><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
+            case  8:
+                gpu_reduction_impl_gpu_kernels::reduce_asum_kernel<T, T_vec, 8, false><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
+            case  4:
+                gpu_reduction_impl_gpu_kernels::reduce_asum_kernel<T, T_vec, 4, false><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
+            case  2:
+                gpu_reduction_impl_gpu_kernels::reduce_asum_kernel<T, T_vec, 2, false><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
+            case  1:
+                gpu_reduction_impl_gpu_kernels::reduce_asum_kernel<T, T_vec, 1, false><<< dimGrid, dimBlock, smemSize >>>(InputV, OutputV, N); break;
         }       
     }
         
@@ -606,27 +818,27 @@ void gpu_reduction<T, T_vec, BLOCK_SIZE, threads_r>::wrapper_reduce_dot(int bloc
         switch (threads)
         {
             case 1024:
-                reduce_dot_kernel<T, T_vec, 1024, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
+                gpu_reduction_impl_gpu_kernels::reduce_dot_kernel<T, T_vec, 1024, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
             case 512:
-                reduce_dot_kernel<T, T_vec, 512, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
+                gpu_reduction_impl_gpu_kernels::reduce_dot_kernel<T, T_vec, 512, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
             case 256:
-                reduce_dot_kernel<T, T_vec, 256, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
+                gpu_reduction_impl_gpu_kernels::reduce_dot_kernel<T, T_vec, 256, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
             case 128:
-                reduce_dot_kernel<T, T_vec, 128, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
+                gpu_reduction_impl_gpu_kernels::reduce_dot_kernel<T, T_vec, 128, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
             case 64:
-                reduce_dot_kernel<T, T_vec, 64, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
+                gpu_reduction_impl_gpu_kernels::reduce_dot_kernel<T, T_vec, 64, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
             case 32:
-                reduce_dot_kernel<T, T_vec, 32, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
+                gpu_reduction_impl_gpu_kernels::reduce_dot_kernel<T, T_vec, 32, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
             case 16:
-                reduce_dot_kernel<T, T_vec, 16, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
+                gpu_reduction_impl_gpu_kernels::reduce_dot_kernel<T, T_vec, 16, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
             case  8:
-                reduce_dot_kernel<T, T_vec, 8, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
+                gpu_reduction_impl_gpu_kernels::reduce_dot_kernel<T, T_vec, 8, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
             case  4:
-                reduce_dot_kernel<T, T_vec, 4, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
+                gpu_reduction_impl_gpu_kernels::reduce_dot_kernel<T, T_vec, 4, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
             case  2:
-                reduce_dot_kernel<T, T_vec, 2, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
+                gpu_reduction_impl_gpu_kernels::reduce_dot_kernel<T, T_vec, 2, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
             case  1:
-                reduce_dot_kernel<T, T_vec, 1, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
+                gpu_reduction_impl_gpu_kernels::reduce_dot_kernel<T, T_vec, 1, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
             }       
     }
     else
@@ -634,43 +846,47 @@ void gpu_reduction<T, T_vec, BLOCK_SIZE, threads_r>::wrapper_reduce_dot(int bloc
         switch (threads)
         {
             case 1024:
-                reduce_dot_kernel<T, T_vec, 1024, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
+                gpu_reduction_impl_gpu_kernels::reduce_dot_kernel<T, T_vec, 1024, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
             case 512:
-                reduce_dot_kernel<T, T_vec, 512, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
+                gpu_reduction_impl_gpu_kernels::reduce_dot_kernel<T, T_vec, 512, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
             case 256:
-                reduce_dot_kernel<T, T_vec, 256, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
+                gpu_reduction_impl_gpu_kernels::reduce_dot_kernel<T, T_vec, 256, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
             case 128:
-                reduce_dot_kernel<T, T_vec, 128, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
+                gpu_reduction_impl_gpu_kernels::reduce_dot_kernel<T, T_vec, 128, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
             case 64:
-                reduce_dot_kernel<T, T_vec, 64, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
+                gpu_reduction_impl_gpu_kernels::reduce_dot_kernel<T, T_vec, 64, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
             case 32:
-                reduce_dot_kernel<T, T_vec, 32, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
+                gpu_reduction_impl_gpu_kernels::reduce_dot_kernel<T, T_vec, 32, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
             case 16:
-                reduce_dot_kernel<T, T_vec, 16, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
+                gpu_reduction_impl_gpu_kernels::reduce_dot_kernel<T, T_vec, 16, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
             case  8:
-                reduce_dot_kernel<T, T_vec, 8, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
+                gpu_reduction_impl_gpu_kernels::reduce_dot_kernel<T, T_vec, 8, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
             case  4:
-                reduce_dot_kernel<T, T_vec, 4, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
+                gpu_reduction_impl_gpu_kernels::reduce_dot_kernel<T, T_vec, 4, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
             case  2:
-                reduce_dot_kernel<T, T_vec, 2, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
+                gpu_reduction_impl_gpu_kernels::reduce_dot_kernel<T, T_vec, 2, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
             case  1:
-                reduce_dot_kernel<T, T_vec, 1, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
+                gpu_reduction_impl_gpu_kernels::reduce_dot_kernel<T, T_vec, 1, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
         }       
     }
         
 }
 
 template<class T, class T_vec, int BLOCK_SIZE, int threads_r>
-T gpu_reduction<T, T_vec, BLOCK_SIZE, threads_r>::reduction_sum(int N, const T_vec InputV, T_vec OutputV, T_vec Output)
+T gpu_reduction<T, T_vec, BLOCK_SIZE, threads_r>::reduction_sum(int N, const T_vec InputV, T_vec OutputV, T_vec Output, bool use_abs_)
 {
     T gpu_result=0.0;
     int threads = 0, blocks = 0, smemSize=0;
-    int maxBlocks=1024;//DEBUG
+    int maxBlocks=BLOCK_SIZE;//DEBUG
     get_blocks_threads_shmem(N, maxBlocks, blocks, threads, smemSize);
 
     //perform reduction
     //printf("threads=%i, blocks=%i, shmem size=%i\n",threads, blocks, smemSize);
-    wrapper_reduce_sum(blocks, threads, smemSize, InputV, OutputV, N);
+    if(use_abs_)
+        wrapper_reduce_asum(blocks, threads, smemSize, InputV, OutputV, N);
+    else
+        wrapper_reduce_sum(blocks, threads, smemSize, InputV, OutputV, N);
+    
     bool needReadBack=true;
     int s=blocks;
     while (s > 1)
@@ -705,7 +921,7 @@ T gpu_reduction<T, T_vec, BLOCK_SIZE, threads_r>::reduction_dot(int N, const T_v
 {
     T gpu_result=0.0;
     int threads = 0, blocks = 0, smemSize=0;
-    int maxBlocks=1024;//DEBUG
+    int maxBlocks=BLOCK_SIZE;//DEBUG
     get_blocks_threads_shmem(N, maxBlocks, blocks, threads, smemSize);
 
     //perform reduction
