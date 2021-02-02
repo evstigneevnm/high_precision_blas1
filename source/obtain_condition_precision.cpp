@@ -9,7 +9,7 @@
 #include <external_libraries/cublas_wrap.h>
 #include <common/gpu_vector_operations.h>
 #include <common/cpu_vector_operations.h>
-#include <common/threaded_dot_product.h>
+#include <common/threaded_reduction.h>
 #include <dot_product_gmp.hpp>
 #include <common/gpu_reduction.h>
 #include <generate_vector_pair.hpp>
@@ -29,7 +29,7 @@ int main(int argc, char const *argv[])
     using min_max_t = gpu_reduction_t::min_max_t;
     using dot_exact_t = dot_product_gmp<T, T_vec>;
     using generate_vector_pair_t = generate_vector_pair<gpu_vector_operations_t, dot_exact_t, gpu_reduction_t>;
-    using threaded_dot_t = threaded_dot_prod<T, T_vec>;
+    using threaded_reduction_t = threaded_reduction<T, T_vec>;
 
     if(argc != 6)
     {
@@ -55,7 +55,7 @@ int main(int argc, char const *argv[])
     gpu_vector_operations_t g_vecs(vec_size, CUBLAS_ref);
     cpu_vector_operations_t c_vecs(vec_size, dot_prod_type_initial);
     gpu_reduction_t reduction(vec_size);
-    threaded_dot_t threaded_dot(vec_size, -1, dot_prod_type_initial);
+    threaded_reduction_t threaded_reduce(vec_size, -1, dot_prod_type_initial);
 
     T *u1_d; T *u2_d; T *u1_c; T *u2_c;
 
@@ -89,10 +89,10 @@ int main(int argc, char const *argv[])
             g_vecs.get(u1_d, u1_c);
             g_vecs.get(u2_d, u2_c);
             
-            threaded_dot.use_normal_prec();            
-            T dot_prod_th = threaded_dot.execute(u1_c, u2_c);
-            threaded_dot.use_high_prec();
-            T dot_prod_th_H = threaded_dot.execute(u1_c, u2_c);
+            threaded_reduce.use_normal_prec();            
+            T dot_prod_th = threaded_reduce.dot(u1_c, u2_c);
+            threaded_reduce.use_high_prec();
+            T dot_prod_th_H = threaded_reduce.dot(u1_c, u2_c);
 
             T dot_prod = c_vecs.scalar_prod(u1_c, u2_c, 0);
             T dot_prod_H = c_vecs.scalar_prod(u1_c, u2_c, 1);            

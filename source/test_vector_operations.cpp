@@ -9,7 +9,7 @@
 #include <external_libraries/cublas_wrap.h>
 #include <common/gpu_vector_operations.h>
 #include <common/cpu_vector_operations.h>
-#include <common/threaded_dot_product.h>
+#include <common/threaded_reduction.h>
 #include <dot_product_gmp.hpp>
 #include <sum_gmp.hpp>
 #include <common/gpu_reduction.h>
@@ -31,7 +31,7 @@ int main(int argc, char const *argv[])
     using dot_exact_t = dot_product_gmp<T, T_vec>;
     using sum_exact_t = sum_gmp<T, T_vec>;
     using generate_vector_pair_t = generate_vector_pair<gpu_vector_operations_t, dot_exact_t, gpu_reduction_t>;
-    using threaded_dot_t = threaded_dot_prod<T, T_vec>;
+    using threaded_reduction_t = threaded_reduction<T, T_vec>;
 
     if(argc != 7)
     {
@@ -58,10 +58,10 @@ int main(int argc, char const *argv[])
     cpu_vector_operations_t c_vecs(vec_size, dot_prod_type);
     gpu_reduction_t reduction(vec_size);
     gpu_reduction_ogita_t reduciton_ogita(vec_size);
-    threaded_dot_t threaded_dot(vec_size, -1, dot_prod_type);
+    threaded_reduction_t threaded_reduce(vec_size, -1, dot_prod_type);
 
 
-    unsigned int exact_bits = 1024;
+    unsigned int exact_bits = 512;
     dot_exact_t dp_ref(exact_bits);
     sum_exact_t s_ref(exact_bits);
 
@@ -93,7 +93,11 @@ int main(int argc, char const *argv[])
     generate_vector_pair_t generator(&g_vecs, &dp_ref, &reduction);
     T cond_estimste = generator.generate(u1_d, u2_d, cond_number_);
     printf("condition estimate = %le\n", cond_estimste);
-    
+    // g_vecs.assign_scalar(12370123.0e-3, u1_d);
+    // g_vecs.set_value_at_point(-1.9999999276e5, vec_size-10, u1_d);
+    // g_vecs.set_value_at_point(-3.987654321e4, vec_size-7, u1_d);
+    // g_vecs.assign_scalar(1237.0e-1, u2_d);
+
     T norm_u1 = g_vecs.norm(u1_d);
     T norm_u2 = g_vecs.norm(u2_d);
     printf("||u1|| = %.24le, ||u2|| = %.24le \n", double(norm_u1), double(norm_u2) );
@@ -133,7 +137,7 @@ int main(int argc, char const *argv[])
         printf("dot_G = %.24le, time = %f ms, time_wall = %lf ms\n", double(dot_prod_3), milliseconds, elapsed_mseconds);
 
         start_ch = std::chrono::steady_clock::now();
-        T dot_prod_C_th = threaded_dot.execute(u1_c, u2_c);
+        T dot_prod_C_th = threaded_reduce.dot(u1_c, u2_c);
         finish_ch = std::chrono::steady_clock::now();
         elapsed_mseconds = std::chrono::duration<double, std::milli>(finish_ch - start_ch).count();
         printf("dot_Ct= %.24le, time_wall = %lf ms\n", double(dot_prod_C_th), double(elapsed_mseconds) );
@@ -157,7 +161,7 @@ int main(int argc, char const *argv[])
             printf("ref   = ");
             dp_ref.print_res();       
             printf("ref   = %.24le\n", double(ref_exact)); 
-            printf("mantisa:_.123456789123456789\n");
+            printf("mantisa: \033[0;31mX.123456789123456789\033[0m\n");
             printf("err_L = %.24le; err_G = %.24le; err_Ct = %.24le; err_C = %.24le\n", double(error_dot_L), double(error_dot_G), double(error_dot_C_th), double(error_dot_C) );
         }
     }
@@ -166,50 +170,80 @@ int main(int argc, char const *argv[])
         printf("========================= sum =========================\n");
         //sum reduction
         auto start_ch = std::chrono::steady_clock::now();
-        T asum_L = g_vecs.absolute_sum(u1_d);
+        T asum_L = g_vecs.absolute_sum(u2_d);
         auto finish_ch = std::chrono::steady_clock::now();
         auto elapsed_mseconds = std::chrono::duration<double, std::milli>(finish_ch - start_ch).count();
         printf("asum_L = %.24le, time_wall = %lf ms\n", double(asum_L), elapsed_mseconds);
         start_ch = std::chrono::steady_clock::now();
-        T asum_G = reduction.asum(u1_d);
+        T asum_G = reduction.asum(u2_d);
         finish_ch = std::chrono::steady_clock::now();
         elapsed_mseconds = std::chrono::duration<double, std::milli>(finish_ch - start_ch).count();
         printf("asum_G = %.24le, time_wall = %lf ms\n", double(asum_G), elapsed_mseconds);
         start_ch = std::chrono::steady_clock::now();
-        T sum_G = reduction.sum(u1_d);
+        T sum_G = reduction.sum(u2_d);
         finish_ch = std::chrono::steady_clock::now();
         elapsed_mseconds = std::chrono::duration<double, std::milli>(finish_ch - start_ch).count();
-        printf("sum_G  = %.24le, time_wall = %lf ms\n", double(sum_G), elapsed_mseconds);    
+        if(sum_G<T(0.0))
+            printf("sum_G  =%.24le, time_wall = %lf ms\n", double(sum_G), elapsed_mseconds);    
+        else
+            printf("sum_G  = %.24le, time_wall = %lf ms\n", double(sum_G), elapsed_mseconds);    
+
+        T sum_ogita_G = 0.0;
 
         start_ch = std::chrono::steady_clock::now();
-        T sum_ogita_G = reduciton_ogita.sum(u1_d);
+        sum_ogita_G = reduciton_ogita.sum(u2_d);
         finish_ch = std::chrono::steady_clock::now();
         elapsed_mseconds = std::chrono::duration<double, std::milli>(finish_ch - start_ch).count();
-        printf("sum_OgG= %.24le, time_wall = %lf ms\n", double(sum_ogita_G), elapsed_mseconds);
-        
+        if(sum_ogita_G<T(0.0))
+            printf("sum_OgG=%.24le, time_wall = %lf ms\n", double(sum_ogita_G), elapsed_mseconds);
+        else
+            printf("sum_OgG= %.24le, time_wall = %lf ms\n", double(sum_ogita_G), elapsed_mseconds);
+
+        printf("d_sum  = %.24le \n", std::abs<T>(sum_ogita_G - sum_G) );
+
+        start_ch = std::chrono::steady_clock::now();
+        threaded_reduce.use_normal_prec();
+        T sum_C_th = threaded_reduce.sum(u2_c);
+        finish_ch = std::chrono::steady_clock::now();
+        elapsed_mseconds = std::chrono::duration<double, std::milli>(finish_ch - start_ch).count();
+        if(sum_C_th<T(0.0))
+            printf("sum_ThC=%.24le, time_wall = %lf ms\n", double(sum_C_th), elapsed_mseconds);
+        else
+            printf("sum_ThC= %.24le, time_wall = %lf ms\n", double(sum_C_th), elapsed_mseconds);
 
         if(use_ref)
         {
 
-            s_ref.set_array(vec_size, u1_c);
+            s_ref.set_array(vec_size, u2_c);
             
-            // start_ch = std::chrono::steady_clock::now();
-            // T dot_prod_2 = c_vecs.scalar_prod(u1_c, u2_c);
-            // finish_ch = std::chrono::steady_clock::now();
-            // elapsed_mseconds = std::chrono::duration<double, std::milli>(finish_ch - start_ch).count();
-            // printf("dot_C = %.24le, time_wall = %lf ms\n", double(dot_prod_2), double(elapsed_mseconds) );
+            start_ch = std::chrono::steady_clock::now();
+            threaded_reduce.use_high_prec();
+            T sum_ogita_C_th = threaded_reduce.sum(u2_c);
+            finish_ch = std::chrono::steady_clock::now();
+            elapsed_mseconds = std::chrono::duration<double, std::milli>(finish_ch - start_ch).count();
+            if(sum_C_th<T(0.0))
+                printf("sum_OgC=%.24le, time_wall = %lf ms\n", double(sum_C_th), elapsed_mseconds);
+            else
+                printf("sum_OgC= %.24le, time_wall = %lf ms\n", double(sum_C_th), elapsed_mseconds);
             
             T ref_exact = s_ref.sum_exact();
 
-            T error_sum_G = s_ref.get_error_T(sum_G);
-            T error_sum_ogita_G = s_ref.get_error_T(sum_ogita_G);
+            T error_sum_G = s_ref.get_error_relative_T(sum_G);
+            T error_sum_ogita_G = s_ref.get_error_relative_T(sum_ogita_G);
+            T error_sum_C_th = s_ref.get_error_relative_T(sum_C_th);
+            T error_sum_ogita_C_th = s_ref.get_error_relative_T(sum_ogita_C_th);
+            
             
 
-            printf("ref   = ");
-            s_ref.print_res();       
-            printf("ref   = %.24le\n", double(ref_exact)); 
-            printf("mantisa:X.123456789123456789\n");
-            printf("err_G = %.24le, err_Ogita_G = %.24le \n", double(error_sum_G), double(error_sum_ogita_G) );
+            if(ref_exact<T(0.0))
+                printf("ref    =%.24le\n", double(ref_exact)); 
+            else
+                printf("ref    = %.24le\n", double(ref_exact)); 
+
+
+            printf("mantisa: \033[0;31mX.123456789123456789\033[0m\n");
+            printf("ref    = "); s_ref.print_res();
+            printf("err_G  = %.24le, err_Ogita_G = %.24le, err_C_th = %.24le, err_Ogita_C_th = %.24le  \n", double(error_sum_G), double(error_sum_ogita_G), double(error_sum_C_th), double(error_sum_ogita_C_th) );
 
         }
     }

@@ -442,6 +442,7 @@ __global__ void reduce_sum_kernel(const T_vec g_idata, T_vec g_odata, int n)
     // we reduce multiple elements per thread.  The number is determined by the
     // number of active thread blocks (via gridDim).  More blocks will result
     // in a larger gridSize and therefore fewer elements per thread
+    
     while (i < n)
     {
         mySum += g_idata[i];
@@ -877,7 +878,7 @@ T gpu_reduction<T, T_vec, BLOCK_SIZE, threads_r>::reduction_sum(int N, const T_v
 {
     T gpu_result=0.0;
     int threads = 0, blocks = 0, smemSize=0;
-    int maxBlocks=BLOCK_SIZE;//DEBUG
+
     get_blocks_threads_shmem(N, maxBlocks, blocks, threads, smemSize);
 
     //perform reduction
@@ -921,7 +922,7 @@ T gpu_reduction<T, T_vec, BLOCK_SIZE, threads_r>::reduction_dot(int N, const T_v
 {
     T gpu_result=0.0;
     int threads = 0, blocks = 0, smemSize=0;
-    int maxBlocks=BLOCK_SIZE;//DEBUG
+
     get_blocks_threads_shmem(N, maxBlocks, blocks, threads, smemSize);
 
     //perform reduction

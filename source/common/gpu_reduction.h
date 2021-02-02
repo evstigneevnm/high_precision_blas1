@@ -3,7 +3,7 @@
 
 #include <utility>
 #include <cstddef>
-
+#include <cmath>
 #include <utils/cuda_support.h>
 
 
@@ -62,6 +62,7 @@ public:
     }
 
 private:
+    const int maxBlocks = std::pow<int>(2,31) - 1;// sm_30 and greater.
 
     size_t vec_size;
     T_vec vec_helper_d = nullptr;
