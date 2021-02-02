@@ -48,11 +48,11 @@ public:
         return res;
     }
 
-    // T dot(const T_vec d1_in, const T_vec d2_in)
-    // {
-    //     T res = reduction_dot(vec_size, d1_in, d2_in, vec_helper_d, vec_helper);
-    //     return res;
-    // }
+    T dot(const T_vec d1_in, const T_vec d2_in)
+    {
+        T res = reduction_dot(vec_size, d1_in, d2_in, vec_helper_d, vec_helper, err_helper_d, err_helper);
+        return res;
+    }
 
 private:
 
@@ -67,7 +67,7 @@ private:
 
     T reduction_sum(int N, const T_vec InputV, T_vec OutputV, T_vec Output, T_vec errV, T_vec err);
     
-    // T reduction_dot(int N, const T_vec InputV1, const T_vec InputV2, T_vec OutputV, T_vec Output);
+    T reduction_dot(int N, const T_vec InputV1, const T_vec InputV2, T_vec OutputV, T_vec Output, T_vec errV, T_vec err);
 
     void findBlockSize(int* whichSize, int num_el);
     // for any integer returns the closest larger power_of_two neighbour.
@@ -88,7 +88,8 @@ private:
     void get_blocks_threads_shmem(int n, int maxBlocks, int& blocks, int& threads, int& smemSize);
     
     void wrapper_reduce_sum(int blocks, int threads, int smemSize, const T_vec InputV, T_vec OutputV, T_vec errV, int N, bool first_run);
-    // void wrapper_reduce_dot(int blocks, int threads, int smemSize, const T_vec InputV1, const T_vec InputV2, T_vec OutputV, int N);
+    
+    void wrapper_reduce_dot(int blocks, int threads, int smemSize, const T_vec InputV1, const T_vec InputV2, T_vec OutputV, T_vec errV, int N, bool first_run);
 
 
     T two_prod_device(T &t, T a, T b)

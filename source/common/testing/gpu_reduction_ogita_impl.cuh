@@ -306,11 +306,12 @@ __global__ void reduce_sum_ogita_kernel(const T_vec g_idata, T_vec g_odata, T_ve
     }
 }
 
-/*
-template <class T, class T_vec, unsigned int blockSize, bool nIsPow2>
-__global__ void reduce_dot_kernel(const T_vec g_idata1, const T_vec g_idata2, T_vec g_odata, int n)
+
+template <class T, class T_vec, unsigned int blockSize, bool nIsPow2, bool first_run>
+__global__ void reduce_dot_ogita_kernel(const T_vec g_idata1, const T_vec g_idata2, T_vec g_odata, T_vec err_data, int n)
 {
     T *sdata = __GPU_REDUCTION_OGITA_H__SharedMemory<T>();
+    T *cdata = &__GPU_REDUCTION_OGITA_H__SharedMemory<T>()[blockSize];
 
     // perform first level of reduction,
     // reading from global memory, writing to shared memory
@@ -319,24 +320,48 @@ __global__ void reduce_dot_kernel(const T_vec g_idata1, const T_vec g_idata2, T_
     unsigned int gridSize = blockSize*2*gridDim.x;
 
     T main_sum = T(0.0);
+    T error_sum = T(0.0);
+    T error_local = T(0.0);
+    T error_local_prod = T(0.0);
     // we reduce multiple elements per thread.  The number is determined by the
     // number of active thread blocks (via gridDim).  More blocks will result
     // in a larger gridSize and therefore fewer elements per thread
     while (i < n)
     {
-        main_sum += g_idata1[i]*g_idata2[i];
+        if(first_run)
+        {
+            err_data[i] = T(0.0);
+        }
 
+        // main_sum += g_idata1[i]*g_idata2[i];
+        T res_l = __GPU_REDUCTION_OGITA_H__two_prod_device(error_local_prod, g_idata1[i], g_idata2[i]);
+        main_sum = __GPU_REDUCTION_OGITA_H__two_sum_device(error_local, main_sum, res_l);
+        error_sum += error_local_prod + error_local + err_data[i];        
+        // printf("%i : %le < %le %le %le %le \n", i, main_sum, g_idata1[i], g_idata2[i], error_local_prod, error_local);
         // ensure we don't read out of bounds -- this is optimized away for powerOf2 sized arrays
+        // printf("%i : %le %le\n", i, g_idata1[i], g_idata2[i]);
         if (nIsPow2 || i + blockSize < n)
         {
 
-            main_sum += g_idata1[i+blockSize]*g_idata2[i+blockSize];
+            if(first_run)
+            {
+                err_data[i+blockSize] = T(0.0);
+            }
+            //main_sum += g_idata1[i+blockSize]*g_idata2[i+blockSize];
+            T res_l = __GPU_REDUCTION_OGITA_H__two_prod_device(error_local_prod, g_idata1[i+blockSize], g_idata2[i+blockSize]);
+            main_sum = __GPU_REDUCTION_OGITA_H__two_sum_device(error_local, main_sum, res_l);            
+            error_sum += error_local_prod + error_local + err_data[i+blockSize];               
+            // printf("%i : %le < %le %le %le %le \n", i+blockSize, main_sum, g_idata1[i+blockSize], g_idata2[i+blockSize], error_local_prod, error_local);
+            // printf("%i : %le %le\n", i+blockSize, g_idata1[i+blockSize], g_idata2[i+blockSize]);
         }
         i += gridSize;
     }
     // each thread puts its local sum into shared memory
     sdata[tid] = main_sum;
+    cdata[tid] = error_sum;
     __syncthreads();
+    // printf("%i %le %le\n", tid, sdata[tid], cdata[tid]);
+    // __syncthreads();
 
 
     // do reduction in shared mem
@@ -344,7 +369,13 @@ __global__ void reduce_dot_kernel(const T_vec g_idata1, const T_vec g_idata2, T_
     {
         if (tid < 512)
         {
-            sdata[tid] = main_sum = main_sum + sdata[tid + 512];
+            // sdata[tid] = main_sum = main_sum + sdata[tid + 512];
+            main_sum = __GPU_REDUCTION_OGITA_H__two_sum_device(error_local, main_sum, sdata[tid + 512]);
+            sdata[tid] = main_sum;
+
+            error_sum += error_local + cdata[tid + 512];
+            cdata[tid] = error_sum;
+            // printf("1024\n");            
         }
 
         __syncthreads();
@@ -353,7 +384,12 @@ __global__ void reduce_dot_kernel(const T_vec g_idata1, const T_vec g_idata2, T_
     {
         if (tid < 256)
         {
-            sdata[tid] = main_sum = main_sum + sdata[tid + 256];
+            // sdata[tid] = main_sum = main_sum + sdata[tid + 256];
+            main_sum = __GPU_REDUCTION_OGITA_H__two_sum_device(error_local, main_sum, sdata[tid + 256]);
+            sdata[tid] = main_sum;
+
+            error_sum += error_local + cdata[tid + 256];
+            cdata[tid] = error_sum;            
         }
 
         __syncthreads();
@@ -363,7 +399,12 @@ __global__ void reduce_dot_kernel(const T_vec g_idata1, const T_vec g_idata2, T_
     {
         if (tid < 128)
         {
-            sdata[tid] = main_sum = main_sum + sdata[tid + 128];
+            // sdata[tid] = main_sum = main_sum + sdata[tid + 128];
+            main_sum = __GPU_REDUCTION_OGITA_H__two_sum_device(error_local, main_sum, sdata[tid + 128]);
+            sdata[tid] = main_sum;
+
+            error_sum += error_local + cdata[tid + 128];
+            cdata[tid] = error_sum;            
         }
 
         __syncthreads();
@@ -373,7 +414,12 @@ __global__ void reduce_dot_kernel(const T_vec g_idata1, const T_vec g_idata2, T_
     {
         if (tid <  64)
         {
-            sdata[tid] = main_sum = main_sum + sdata[tid +  64];
+            // sdata[tid] = main_sum = main_sum + sdata[tid +  64];
+            main_sum = __GPU_REDUCTION_OGITA_H__two_sum_device(error_local, main_sum, sdata[tid + 64]);
+            sdata[tid] = main_sum;
+
+            error_sum += error_local + cdata[tid + 64];
+            cdata[tid] = error_sum;            
         }
 
         __syncthreads();
@@ -385,46 +431,81 @@ __global__ void reduce_dot_kernel(const T_vec g_idata1, const T_vec g_idata2, T_
         // we need to declare our shared memory volatile so that the compiler
         // doesn't reorder stores to it and induce incorrect behavior.
         volatile T *smem = sdata;
+        volatile T *cmem = cdata;
 
         if (blockSize >=  64)
         {
-            smem[tid] = main_sum = main_sum + smem[tid + 32];
+            // smem[tid] = main_sum = main_sum + smem[tid + 32];
+            main_sum = __GPU_REDUCTION_OGITA_H__two_sum_device(error_local, main_sum, smem[tid + 32]);
+            smem[tid] = main_sum;
+
+            error_sum += error_local + cmem[tid + 32];
+            cmem[tid] = error_sum;
         }
 
         if (blockSize >=  32)
         {
-            smem[tid] = main_sum = main_sum + smem[tid + 16];
+            // smem[tid] = main_sum = main_sum + smem[tid + 16];
+            main_sum = __GPU_REDUCTION_OGITA_H__two_sum_device(error_local, main_sum, smem[tid + 16]);
+            smem[tid] = main_sum;
+
+            error_sum += error_local + cmem[tid + 16];
+            cmem[tid] = error_sum;            
         }
 
         if (blockSize >=  16)
         {
-            smem[tid] = main_sum = main_sum + smem[tid +  8];
+            // smem[tid] = main_sum = main_sum + smem[tid +  8];
+            main_sum = __GPU_REDUCTION_OGITA_H__two_sum_device(error_local, main_sum, smem[tid + 8]);
+            smem[tid] = main_sum;
+
+            error_sum += error_local + cmem[tid + 8];
+            cmem[tid] = error_sum;            
         }
 
         if (blockSize >=   8)
         {
-            smem[tid] = main_sum = main_sum + smem[tid +  4];
+            // smem[tid] = main_sum = main_sum + smem[tid +  4];
+            main_sum = __GPU_REDUCTION_OGITA_H__two_sum_device(error_local, main_sum, smem[tid + 4]);
+            smem[tid] = main_sum;
+
+            error_sum += error_local + cmem[tid + 4];
+            cmem[tid] = error_sum;            
         }
 
         if (blockSize >=   4)
         {
-            smem[tid] = main_sum = main_sum + smem[tid +  2];
+            // smem[tid] = main_sum = main_sum + smem[tid +  2];
+            main_sum = __GPU_REDUCTION_OGITA_H__two_sum_device(error_local, main_sum, smem[tid + 2]);
+            smem[tid] = main_sum;
+
+            error_sum += error_local + cmem[tid + 2];
+            cmem[tid] = error_sum;            
         }
 
         if (blockSize >=   2)
         {
-            smem[tid] = main_sum = main_sum + smem[tid +  1];
+            // smem[tid] = main_sum = main_sum + smem[tid +  1];
+            main_sum = __GPU_REDUCTION_OGITA_H__two_sum_device(error_local, main_sum, smem[tid + 1]);
+            smem[tid] = main_sum;
+
+            error_sum += error_local + cmem[tid + 1];
+            cmem[tid] = error_sum;                  
         }
     }
 
     // write result for this block to global mem
     if (tid == 0)
     {
-        g_odata[blockIdx.x] = sdata[0];
+        g_odata[blockIdx.x] =  sdata[0];
+        err_data[blockIdx.x] = cdata[0];
     }
 }
-*/
+
 }
+
+
+
 
 template<class T, class T_vec, int BLOCK_SIZE, int threads_r>
 void gpu_reduction_ogita<T, T_vec, BLOCK_SIZE, threads_r>::get_blocks_threads_shmem(int n, int maxBlocks, int &blocks, int &threads, int &smemSize)
@@ -598,39 +679,88 @@ void gpu_reduction_ogita<T, T_vec, BLOCK_SIZE, threads_r>::wrapper_reduce_sum(in
         
 }
 
-/*
+
+
 template<class T, class T_vec, int BLOCK_SIZE, int threads_r>
-void gpu_reduction_ogita<T, T_vec, BLOCK_SIZE, threads_r>::wrapper_reduce_dot(int blocks, int threads, int smemSize, const T_vec InputV1, const T_vec InputV2, T_vec OutputV, int N)
+void gpu_reduction_ogita<T, T_vec, BLOCK_SIZE, threads_r>::wrapper_reduce_dot(int blocks, int threads, int smemSize, const T_vec InputV1, const T_vec InputV2, T_vec OutputV, T_vec errV, int N, bool first_run)
 {
+
+    // std::cout << "smemSize = " << smemSize << " threads = " << threads<< std::endl;
 
     dim3 dimBlock(threads, 1, 1);
     dim3 dimGrid(blocks, 1, 1);
-    if(isPow2(N))
+    // printf("smemSize = %i, threads = %i, first_run = %d\n", smemSize, threads, first_run);
+    
+     if(isPow2(N))
     {
         switch (threads)
         {
             case 1024:
-                reduce_dot_kernel<T, T_vec, 1024, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
+                if(first_run)
+                    gpu_reduction_ogita_gpu_kernels::reduce_dot_ogita_kernel<T, T_vec, 1024, true, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, errV, N); 
+                else
+                    gpu_reduction_ogita_gpu_kernels::reduce_dot_ogita_kernel<T, T_vec, 1024, true, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, errV, N); 
+                break;
             case 512:
-                reduce_dot_kernel<T, T_vec, 512, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
+                if(first_run)
+                    gpu_reduction_ogita_gpu_kernels::reduce_dot_ogita_kernel<T, T_vec, 512, true, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, errV, N); 
+                else
+                    gpu_reduction_ogita_gpu_kernels::reduce_dot_ogita_kernel<T, T_vec, 512, true, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, errV, N); 
+                break;
             case 256:
-                reduce_dot_kernel<T, T_vec, 256, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
+                if(first_run)
+                    gpu_reduction_ogita_gpu_kernels::reduce_dot_ogita_kernel<T, T_vec, 256, true, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, errV, N); 
+                else
+                    gpu_reduction_ogita_gpu_kernels::reduce_dot_ogita_kernel<T, T_vec, 256, true, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, errV, N); 
+                break;
             case 128:
-                reduce_dot_kernel<T, T_vec, 128, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
+                if(first_run)
+                    gpu_reduction_ogita_gpu_kernels::reduce_dot_ogita_kernel<T, T_vec, 128, true, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, errV, N); 
+                else
+                    gpu_reduction_ogita_gpu_kernels::reduce_dot_ogita_kernel<T, T_vec, 128, true, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, errV, N); 
+                break;
             case 64:
-                reduce_dot_kernel<T, T_vec, 64, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
+                if(first_run)
+                    gpu_reduction_ogita_gpu_kernels::reduce_dot_ogita_kernel<T, T_vec, 64, true, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, errV, N); 
+                else
+                    gpu_reduction_ogita_gpu_kernels::reduce_dot_ogita_kernel<T, T_vec, 64, true, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, errV, N); 
+                break;
             case 32:
-                reduce_dot_kernel<T, T_vec, 32, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
+                if(first_run)
+                    gpu_reduction_ogita_gpu_kernels::reduce_dot_ogita_kernel<T, T_vec, 32, true, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, errV, N); 
+                else
+                    gpu_reduction_ogita_gpu_kernels::reduce_dot_ogita_kernel<T, T_vec, 32, true, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, errV, N); 
+                break;
             case 16:
-                reduce_dot_kernel<T, T_vec, 16, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
+                if(first_run)
+                    gpu_reduction_ogita_gpu_kernels::reduce_dot_ogita_kernel<T, T_vec, 16, true, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, errV, N); 
+                else
+                    gpu_reduction_ogita_gpu_kernels::reduce_dot_ogita_kernel<T, T_vec, 16, true, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, errV, N); 
+                break;
             case  8:
-                reduce_dot_kernel<T, T_vec, 8, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
+                if(first_run)
+                    gpu_reduction_ogita_gpu_kernels::reduce_dot_ogita_kernel<T, T_vec, 8, true, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, errV, N); 
+                else
+                    gpu_reduction_ogita_gpu_kernels::reduce_dot_ogita_kernel<T, T_vec, 8, true, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, errV, N); 
+                break;
             case  4:
-                reduce_dot_kernel<T, T_vec, 4, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
+                if(first_run)
+                    gpu_reduction_ogita_gpu_kernels::reduce_dot_ogita_kernel<T, T_vec, 4, true, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, errV, N); 
+                else
+                    gpu_reduction_ogita_gpu_kernels::reduce_dot_ogita_kernel<T, T_vec, 4, true, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, errV, N); 
+                break;
             case  2:
-                reduce_dot_kernel<T, T_vec, 2, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
+                if(first_run)
+                    gpu_reduction_ogita_gpu_kernels::reduce_dot_ogita_kernel<T, T_vec, 2, true, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, errV, N); 
+                else
+                    gpu_reduction_ogita_gpu_kernels::reduce_dot_ogita_kernel<T, T_vec, 2, true, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, errV, N); 
+                break;
             case  1:
-                reduce_dot_kernel<T, T_vec, 1, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
+                if(first_run)
+                    gpu_reduction_ogita_gpu_kernels::reduce_dot_ogita_kernel<T, T_vec, 1, true, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, errV, N); 
+                else
+                    gpu_reduction_ogita_gpu_kernels::reduce_dot_ogita_kernel<T, T_vec, 1, true, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, errV, N); 
+                break;
             }       
     }
     else
@@ -638,33 +768,78 @@ void gpu_reduction_ogita<T, T_vec, BLOCK_SIZE, threads_r>::wrapper_reduce_dot(in
         switch (threads)
         {
             case 1024:
-                reduce_dot_kernel<T, T_vec, 1024, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
+                if(first_run)
+                    gpu_reduction_ogita_gpu_kernels::reduce_dot_ogita_kernel<T, T_vec, 1024, false, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, errV, N); 
+                else
+                    gpu_reduction_ogita_gpu_kernels::reduce_dot_ogita_kernel<T, T_vec, 1024, false, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, errV, N); 
+                break;
             case 512:
-                reduce_dot_kernel<T, T_vec, 512, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
+                if(first_run)
+                    gpu_reduction_ogita_gpu_kernels::reduce_dot_ogita_kernel<T, T_vec, 512, false, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, errV, N); 
+                else
+                    gpu_reduction_ogita_gpu_kernels::reduce_dot_ogita_kernel<T, T_vec, 512, false, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, errV, N); 
+                break;
             case 256:
-                reduce_dot_kernel<T, T_vec, 256, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
+                if(first_run)
+                    gpu_reduction_ogita_gpu_kernels::reduce_dot_ogita_kernel<T, T_vec, 256, false, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, errV, N); 
+                else
+                    gpu_reduction_ogita_gpu_kernels::reduce_dot_ogita_kernel<T, T_vec, 256, false, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, errV, N); 
+                break;
             case 128:
-                reduce_dot_kernel<T, T_vec, 128, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
+                if(first_run)
+                    gpu_reduction_ogita_gpu_kernels::reduce_dot_ogita_kernel<T, T_vec, 128, false, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, errV, N); 
+                else
+                    gpu_reduction_ogita_gpu_kernels::reduce_dot_ogita_kernel<T, T_vec, 128, false, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, errV, N); 
+                break;
             case 64:
-                reduce_dot_kernel<T, T_vec, 64, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
+                if(first_run)
+                    gpu_reduction_ogita_gpu_kernels::reduce_dot_ogita_kernel<T, T_vec, 64, false, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, errV, N); 
+                else
+                    gpu_reduction_ogita_gpu_kernels::reduce_dot_ogita_kernel<T, T_vec, 64, false, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, errV, N); 
+                break;
             case 32:
-                reduce_dot_kernel<T, T_vec, 32, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
+                if(first_run)
+                    gpu_reduction_ogita_gpu_kernels::reduce_dot_ogita_kernel<T, T_vec, 32, false, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, errV, N); 
+                else
+                    gpu_reduction_ogita_gpu_kernels::reduce_dot_ogita_kernel<T, T_vec, 32, false, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, errV, N); 
+                break;
             case 16:
-                reduce_dot_kernel<T, T_vec, 16, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
+                if(first_run)
+                    gpu_reduction_ogita_gpu_kernels::reduce_dot_ogita_kernel<T, T_vec, 16, false, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, errV, N); 
+                else
+                    gpu_reduction_ogita_gpu_kernels::reduce_dot_ogita_kernel<T, T_vec, 16, false, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, errV, N); 
+                break;
             case  8:
-                reduce_dot_kernel<T, T_vec, 8, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
+                if(first_run)
+                    gpu_reduction_ogita_gpu_kernels::reduce_dot_ogita_kernel<T, T_vec, 8, false, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, errV, N); 
+                else
+                    gpu_reduction_ogita_gpu_kernels::reduce_dot_ogita_kernel<T, T_vec, 8, false, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, errV, N); 
+                break;
             case  4:
-                reduce_dot_kernel<T, T_vec, 4, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
+                if(first_run)
+                    gpu_reduction_ogita_gpu_kernels::reduce_dot_ogita_kernel<T, T_vec, 4, false, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, errV, N); 
+                else
+                    gpu_reduction_ogita_gpu_kernels::reduce_dot_ogita_kernel<T, T_vec, 4, false, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, errV, N); 
+                break;
             case  2:
-                reduce_dot_kernel<T, T_vec, 2, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
+                if(first_run)
+                    gpu_reduction_ogita_gpu_kernels::reduce_dot_ogita_kernel<T, T_vec, 2, false, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, errV, N); 
+                else
+                    gpu_reduction_ogita_gpu_kernels::reduce_dot_ogita_kernel<T, T_vec, 2, false, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, errV, N); 
+                break;
             case  1:
-                reduce_dot_kernel<T, T_vec, 1, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, N); break;
+                if(first_run)
+                    gpu_reduction_ogita_gpu_kernels::reduce_dot_ogita_kernel<T, T_vec, 1, false, true><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, errV, N); 
+                else
+                    gpu_reduction_ogita_gpu_kernels::reduce_dot_ogita_kernel<T, T_vec, 1, false, false><<< dimGrid, dimBlock, smemSize >>>(InputV1, InputV2, OutputV, errV, N); 
+                break;
         }       
     }
         
 }
 
-*/
+
+
 
 template<class T, class T_vec, int BLOCK_SIZE, int threads_r>
 T gpu_reduction_ogita<T, T_vec, BLOCK_SIZE, threads_r>::reduction_sum(int N, const T_vec InputV, T_vec OutputV, T_vec Output, T_vec errV, T_vec err)
@@ -676,21 +851,21 @@ T gpu_reduction_ogita<T, T_vec, BLOCK_SIZE, threads_r>::reduction_sum(int N, con
     get_blocks_threads_shmem(N, maxBlocks, blocks, threads, smemSize);
 
     //perform reduction
-    printf("s = %i, threads=%i, blocks=%i, shmem size=%i\n",N,threads, blocks, smemSize);
+    // printf("s = %i, threads=%i, blocks=%i, shmem size=%i\n",N,threads, blocks, smemSize);
     wrapper_reduce_sum(blocks, threads, smemSize, InputV, OutputV, errV, N, true);
     bool needReadBack=true;
     int s=blocks;
     while (s > 1)
     {
         get_blocks_threads_shmem(s, maxBlocks, blocks, threads, smemSize);
-        printf("s = %i, threads=%i, blocks=%i, shmem size=%i\n",s, threads, blocks, smemSize);
+        // printf("s = %i, threads=%i, blocks=%i, shmem size=%i\n",s, threads, blocks, smemSize);
         wrapper_reduce_sum(blocks, threads, smemSize, OutputV, OutputV, errV, s, false);
         s = (s + (threads*2-1)) / (threads*2);
     }
     
     if (s > 1)
     {
-        printf("s= %i >1, threads=%i, blocks=%i, shmem size=%i\n",s, threads, blocks, smemSize);
+        // printf("s= %i >1, threads=%i, blocks=%i, shmem size=%i\n",s, threads, blocks, smemSize);
         device_2_host_cpy<T>(Output, OutputV, s);
         device_2_host_cpy<T>(err, errV, s);
 
@@ -704,58 +879,68 @@ T gpu_reduction_ogita<T, T_vec, BLOCK_SIZE, threads_r>::reduction_sum(int N, con
     }
     if (needReadBack)
     {
-        printf("s = %i == 1, needReadBack.\n",s);
+        // printf("s = %i == 1, needReadBack.\n",s);
         device_2_host_cpy<T>(&gpu_result, OutputV, 1);
         device_2_host_cpy<T>(&gpu_err, errV, 1);
     }
 
     long double gpu_res_long = (long double)gpu_result + (long double)gpu_err;
-    printf(" gpu_result = %.24le\n gpu_err = %.24le\n gpu_lsum= %.24Le\n", gpu_result, gpu_err, gpu_res_long);
+    // printf(" gpu_result = %.24le\n gpu_err = %.24le\n gpu_lsum= %.24Le\n", gpu_result, gpu_err, gpu_res_long);
     gpu_result = T(gpu_res_long);
     return(gpu_result);
 }
 
 
-/*
+
 template<class T, class T_vec, int BLOCK_SIZE, int threads_r>
-T gpu_reduction_ogita<T, T_vec, BLOCK_SIZE, threads_r>::reduction_dot(int N, const T_vec InputV1, const T_vec InputV2, T_vec OutputV, T_vec Output)
+T gpu_reduction_ogita<T, T_vec, BLOCK_SIZE, threads_r>::reduction_dot(int N, const T_vec InputV1, const T_vec InputV2, T_vec OutputV, T_vec Output, T_vec errV, T_vec err)
 {
-    T gpu_result=0.0;
+    T gpu_result = T(0.0);
+    T gpu_err = T(0.0);
     int threads = 0, blocks = 0, smemSize=0;
-    int maxBlocks=1024;//DEBUG
+
     get_blocks_threads_shmem(N, maxBlocks, blocks, threads, smemSize);
 
-    //perform reduction
-    //printf("threads=%i, blocks=%i, shmem size=%i\n",threads, blocks, smemSize);
-    wrapper_reduce_dot(blocks, threads, smemSize, InputV1, InputV2, OutputV, N);
+    // perform reduction
+    // printf(" s = %i, threads=%i, blocks=%i, shmem size=%i\n",N,threads, blocks, smemSize);
+    wrapper_reduce_dot(blocks, threads, smemSize, InputV1, InputV2, OutputV, errV, N, true);
     bool needReadBack=true;
     int s=blocks;
     while (s > 1)
     {
         get_blocks_threads_shmem(s, maxBlocks, blocks, threads, smemSize);
-        //printf("threads=%i, blocks=%i, shmem size=%i\n",threads, blocks, smemSize);
-        wrapper_reduce_sum(blocks, threads, smemSize, OutputV, OutputV, s);
+        // printf(" s = %i, threads=%i, blocks=%i, shmem size=%i\n", s, threads, blocks, smemSize);
+        wrapper_reduce_sum(blocks, threads, smemSize, OutputV, OutputV, errV, s, false);
         s = (s + (threads*2-1)) / (threads*2);
     }
+    
     if (s > 1)
     {
-        //cudaMemcpy(Output, OutputV, s * sizeof(T), cudaMemcpyDeviceToHost);
+        // printf(" s= %i >1, threads=%i, blocks=%i, shmem size=%i\n", s, threads, blocks, smemSize);
         device_2_host_cpy<T>(Output, OutputV, s);
+        device_2_host_cpy<T>(err, errV, s);
 
+        T tt = T(0.0);
         for (int i=0; i < s; i++)
         {
-            gpu_result += Output[i];
+            gpu_result = two_sum_device(tt, gpu_result, Output[i]);
+            gpu_err += tt + err[i];
         }
         needReadBack = false;
     }
     if (needReadBack)
     {
-        //cudaMemcpy(&gpu_result, OutputV, sizeof(T), cudaMemcpyDeviceToHost);
+        // printf(" s = %i == 1, needReadBack.\n",s);
         device_2_host_cpy<T>(&gpu_result, OutputV, 1);
+        device_2_host_cpy<T>(&gpu_err, errV, 1);
     }
-    return gpu_result;  
+
+    long double gpu_res_long = (long double)gpu_result + (long double)gpu_err;
+    // printf(" gpu_result = %.24le\n gpu_err = %.24le\n gpu_lsum= %.24Le\n", gpu_result, gpu_err, gpu_res_long);
+    gpu_result = T(gpu_res_long);
+    return(gpu_result);
 }
-*/
+
 
 
 #endif

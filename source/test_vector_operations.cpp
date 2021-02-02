@@ -61,7 +61,7 @@ int main(int argc, char const *argv[])
     threaded_reduction_t threaded_reduce(vec_size, -1, dot_prod_type);
 
 
-    unsigned int exact_bits = 512;
+    unsigned int exact_bits = 1024;
     dot_exact_t dp_ref(exact_bits);
     sum_exact_t s_ref(exact_bits);
 
@@ -93,10 +93,11 @@ int main(int argc, char const *argv[])
     generate_vector_pair_t generator(&g_vecs, &dp_ref, &reduction);
     T cond_estimste = generator.generate(u1_d, u2_d, cond_number_);
     printf("condition estimate = %le\n", cond_estimste);
-    // g_vecs.assign_scalar(12370123.0e-3, u1_d);
+    // g_vecs.assign_scalar(1.0, u1_d);
+    // g_vecs.assign_scalar(2.0, u2_d);
     // g_vecs.set_value_at_point(-1.9999999276e5, vec_size-10, u1_d);
     // g_vecs.set_value_at_point(-3.987654321e4, vec_size-7, u1_d);
-    // g_vecs.assign_scalar(1237.0e-1, u2_d);
+    
 
     T norm_u1 = g_vecs.norm(u1_d);
     T norm_u2 = g_vecs.norm(u2_d);
@@ -141,6 +142,15 @@ int main(int argc, char const *argv[])
         finish_ch = std::chrono::steady_clock::now();
         elapsed_mseconds = std::chrono::duration<double, std::milli>(finish_ch - start_ch).count();
         printf("dot_Ct= %.24le, time_wall = %lf ms\n", double(dot_prod_C_th), double(elapsed_mseconds) );
+        
+
+        start_ch = std::chrono::steady_clock::now();
+        T dot_prod_ogita_G = reduciton_ogita.dot(u1_d, u2_d);
+        cudaDeviceSynchronize();
+        finish_ch = std::chrono::steady_clock::now();
+        elapsed_mseconds = std::chrono::duration<double, std::milli>(finish_ch - start_ch).count();        
+        printf("dot_OG= %.24le, time_wall = %lf ms\n", double(dot_prod_ogita_G), elapsed_mseconds);
+
         if(use_ref)
         {
 
@@ -157,12 +167,14 @@ int main(int argc, char const *argv[])
             T error_dot_G = dp_ref.get_error_T(dot_prod_3);
             T error_dot_C = dp_ref.get_error_T(dot_prod_2);
             T error_dot_C_th = dp_ref.get_error_T(dot_prod_C_th);
+            T error_dot_G_ogita = dp_ref.get_error_T(dot_prod_ogita_G);
+            
 
             printf("ref   = ");
             dp_ref.print_res();       
             printf("ref   = %.24le\n", double(ref_exact)); 
             printf("mantisa: \033[0;31mX.123456789123456789\033[0m\n");
-            printf("err_L = %.24le; err_G = %.24le; err_Ct = %.24le; err_C = %.24le\n", double(error_dot_L), double(error_dot_G), double(error_dot_C_th), double(error_dot_C) );
+            printf("err_L = %.24le; err_G = %.24le; err_Ct = %.24le; err_C = %.24le; err_G_ogita = %.24le \n", double(error_dot_L), double(error_dot_G), double(error_dot_C_th), double(error_dot_C), double(error_dot_G_ogita) );
         }
     }
     if(operation_type == 0 || operation_type == 1)
@@ -228,10 +240,10 @@ int main(int argc, char const *argv[])
             
             T ref_exact = s_ref.sum_exact();
 
-            T error_sum_G = s_ref.get_error_relative_T(sum_G);
-            T error_sum_ogita_G = s_ref.get_error_relative_T(sum_ogita_G);
-            T error_sum_C_th = s_ref.get_error_relative_T(sum_C_th);
-            T error_sum_ogita_C_th = s_ref.get_error_relative_T(sum_ogita_C_th);
+            T error_sum_G = s_ref.get_error_relative(sum_G);
+            T error_sum_ogita_G = s_ref.get_error_relative(sum_ogita_G);
+            T error_sum_C_th = s_ref.get_error_relative(sum_C_th);
+            T error_sum_ogita_C_th = s_ref.get_error_relative(sum_ogita_C_th);
             
             
 

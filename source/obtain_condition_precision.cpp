@@ -10,6 +10,7 @@
 #include <common/gpu_vector_operations.h>
 #include <common/cpu_vector_operations.h>
 #include <common/threaded_reduction.h>
+#include <common/testing/gpu_reduction_ogita.h>
 #include <dot_product_gmp.hpp>
 #include <common/gpu_reduction.h>
 #include <generate_vector_pair.hpp>
@@ -26,6 +27,7 @@ int main(int argc, char const *argv[])
     using cpu_vector_operations_t = cpu_vector_operations<T>;
     using T_vec = gpu_vector_operations_t::vector_type;
     using gpu_reduction_t = gpu_reduction<T, T_vec>;
+    using gpu_reduction_ogita_t = gpu_reduction_ogita<T, T_vec>;      
     using min_max_t = gpu_reduction_t::min_max_t;
     using dot_exact_t = dot_product_gmp<T, T_vec>;
     using generate_vector_pair_t = generate_vector_pair<gpu_vector_operations_t, dot_exact_t, gpu_reduction_t>;
@@ -55,6 +57,7 @@ int main(int argc, char const *argv[])
     gpu_vector_operations_t g_vecs(vec_size, CUBLAS_ref);
     cpu_vector_operations_t c_vecs(vec_size, dot_prod_type_initial);
     gpu_reduction_t reduction(vec_size);
+    gpu_reduction_ogita_t reduction_ogita(vec_size);
     threaded_reduction_t threaded_reduce(vec_size, -1, dot_prod_type_initial);
 
     T *u1_d; T *u2_d; T *u1_c; T *u2_c;
@@ -82,9 +85,10 @@ int main(int argc, char const *argv[])
             printf("condition estimate = %le\n", cond_estimste);
             T dot_prod_BLAS = g_vecs.scalar_prod(u1_d, u2_d);
             T dot_prod_reduct = reduction.dot(u1_d, u2_d);
-
+            T dot_prod_reduct_ogita = reduction_ogita.dot(u1_d, u2_d);
             printf("dot_L = %.24le \n", double(dot_prod_BLAS) );  
-            printf("dot_G = %.24le \n", double(dot_prod_reduct) );          
+            printf("dot_G = %.24le \n", double(dot_prod_reduct) );  
+            printf("dot_OG= %.24le \n", double(dot_prod_reduct_ogita) );          
             
             g_vecs.get(u1_d, u1_c);
             g_vecs.get(u2_d, u2_c);
@@ -107,6 +111,7 @@ int main(int argc, char const *argv[])
 
             T error_exact_L = dp_ref.get_error_relative(dot_prod_BLAS);
             T error_exact_G = dp_ref.get_error_relative(dot_prod_reduct);
+            T error_exact_ogita_G = dp_ref.get_error_relative(dot_prod_reduct_ogita);
             T error_exact_C = dp_ref.get_error_relative(dot_prod);
             T error_exact_C_H = dp_ref.get_error_relative(dot_prod_H);    
             T error_exact_C_th = dp_ref.get_error_relative(dot_prod_th);
@@ -114,9 +119,9 @@ int main(int argc, char const *argv[])
 
             printf("ref   = %.24le \n", double(ref_exact));        
             printf("mantisa:_.123456789123456789 \n");
-            printf("err_L = %.24le \nerr_G = %.24le \nerr_Ct = %.24le \nerr_C = %.24le \nerrCtH = %.24le \nerr_CH = %.24le \n", double(error_exact_L), double(error_exact_G), double(error_exact_C_th), double(error_exact_C), double(error_exact_C_th_H), double(error_exact_C_H) );
+            printf("err_L = %.24le \nerr_G = %.24le \nerr_GH= %.24le \nerr_Ct = %.24le \nerr_C = %.24le \nerrCtH = %.24le \nerr_CH = %.24le \n", double(error_exact_L), double(error_exact_G), double(error_exact_ogita_G), double(error_exact_C_th), double(error_exact_C), double(error_exact_C_th_H), double(error_exact_C_H) );
 
-            if ( !(f << cond_estimste << " " << error_exact_L << " " << error_exact_G << " " << error_exact_C << " " <<  error_exact_C_H << " " << error_exact_C_th << " " << error_exact_C_th_H << std::endl ) )
+            if ( !(f << cond_estimste << " " << error_exact_L << " " << error_exact_G << " " << error_exact_ogita_G << " " << error_exact_C << " " <<  error_exact_C_H << " " << error_exact_C_th << " " << error_exact_C_th_H << std::endl ) )
             {
                 throw std::runtime_error("error while writing to file: " + f_name);
             }

@@ -59,7 +59,7 @@ vec_D:
 vec_F:
 	$(NVCC) $(GCCFLAGS_RN) $(FTYPE) $(IPROJECT) $(ICUDA) $(IGMP) source/test_vector_operations.cpp $(LGMP) $(LCUDA) $(LIBS2)  gpu_vec_kers.o cuda_dot_prod.o cuda_reduction_kers.o cuda_helper_kers.o cuda_reduction_ogita_kers.o -o test_vector_operations.bin
 bench_D:
-	$(NVCC) $(GCCFLAGS_RN) $(DTYPE) $(IPROJECT) $(ICUDA) $(IGMP) source/obtain_condition_precision.cpp $(LGMP) $(LCUDA) $(LIBS2)  gpu_vec_kers.o cuda_dot_prod.o cuda_reduction_kers.o cuda_helper_kers.o -o benchmark.bin
+	$(NVCC) $(GCCFLAGS_RN) $(DTYPE) $(IPROJECT) $(ICUDA) $(IGMP) source/obtain_condition_precision.cpp $(LGMP) $(LCUDA) $(LIBS2)  gpu_vec_kers.o cuda_dot_prod.o cuda_reduction_kers.o cuda_helper_kers.o cuda_reduction_ogita_kers.o -o benchmark.bin
 bench_F:
-	$(NVCC) $(GCCFLAGS_RN) $(FTYPE) $(IPROJECT) $(ICUDA) $(IGMP) source/obtain_condition_precision.cpp $(LGMP) $(LCUDA) $(LIBS2)  gpu_vec_kers.o cuda_dot_prod.o cuda_reduction_kers.o cuda_helper_kers.o -o benchmark.bin
+	$(NVCC) $(GCCFLAGS_RN) $(FTYPE) $(IPROJECT) $(ICUDA) $(IGMP) source/obtain_condition_precision.cpp $(LGMP) $(LCUDA) $(LIBS2)  gpu_vec_kers.o cuda_dot_prod.o cuda_reduction_kers.o cuda_helper_kers.o cuda_reduction_ogita_kers.o -o benchmark.bin
 
