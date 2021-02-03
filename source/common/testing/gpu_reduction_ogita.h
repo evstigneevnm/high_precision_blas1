@@ -5,12 +5,49 @@
 #include <cstddef>
 #include <cmath>
 #include <utils/cuda_support.h>
+#include <thrust/complex.h>
+
+
+namespace gpu_reduction_ogita_type{
+
+template<typename T>
+struct type_complex_cast
+{
+};
+
+template<>
+struct type_complex_cast<float>
+{
+    typedef float norm_type;
+};
+
+template<>
+struct type_complex_cast<double>
+{
+    typedef double norm_type;
+};
+  
+template<>
+struct type_complex_cast< thrust::complex<float> >
+{
+    typedef float norm_type;
+};
+template<>
+struct type_complex_cast< thrust::complex<double> >
+{
+    typedef double norm_type;
+};    
+
+}
+
 
 template<class T, class T_vec, int BLOCK_SIZE = 1024, int threads_r = 64>
 class gpu_reduction_ogita
 {
+private:
+    using T_real = typename gpu_reduction_ogita_type::type_complex_cast<T>::norm_type;
+
 public:
-    using min_max_t = std::pair<T,T>;
 
     gpu_reduction_ogita(size_t vec_size_):
     vec_size(vec_size_)
@@ -73,7 +110,7 @@ private:
     
     T reduction_dot(int N, const T_vec InputV1, const T_vec InputV2, T_vec OutputV, T_vec Output, T_vec errV, T_vec err);
 
-    void findBlockSize(int* whichSize, int num_el);
+    // void findBlockSize(int* whichSize, int num_el);
     // for any integer returns the closest larger power_of_two neighbour.
     unsigned int nextPow2(unsigned int x)
     {

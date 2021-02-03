@@ -11,7 +11,7 @@
 #include <common/cpu_vector_operations.h>
 #include <common/threaded_reduction.h>
 #include <common/testing/gpu_reduction_ogita.h>
-#include <dot_product_gmp.hpp>
+#include <high_prec/dot_product_gmp.hpp>
 #include <common/gpu_reduction.h>
 #include <generate_vector_pair.hpp>
 #include <chrono>
@@ -118,7 +118,7 @@ int main(int argc, char const *argv[])
             T error_exact_C_th_H = dp_ref.get_error_relative(dot_prod_th_H);  
 
             printf("ref   = %.24le \n", double(ref_exact));        
-            printf("mantisa:_.123456789123456789 \n");
+            printf("mantisa:\033[0;31mX.123456789123456789\033[0m \n");
             printf("err_L = %.24le \nerr_G = %.24le \nerr_GH= %.24le \nerr_Ct = %.24le \nerr_C = %.24le \nerrCtH = %.24le \nerr_CH = %.24le \n", double(error_exact_L), double(error_exact_G), double(error_exact_ogita_G), double(error_exact_C_th), double(error_exact_C), double(error_exact_C_th_H), double(error_exact_C_H) );
 
             if ( !(f << cond_estimste << " " << error_exact_L << " " << error_exact_G << " " << error_exact_ogita_G << " " << error_exact_C << " " <<  error_exact_C_H << " " << error_exact_C_th << " " << error_exact_C_th_H << std::endl ) )

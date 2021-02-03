@@ -10,8 +10,8 @@
 #include <common/gpu_vector_operations.h>
 #include <common/cpu_vector_operations.h>
 #include <common/threaded_reduction.h>
-#include <dot_product_gmp.hpp>
-#include <sum_gmp.hpp>
+#include <high_prec/dot_product_gmp.hpp>
+#include <high_prec/sum_gmp.hpp>
 #include <common/gpu_reduction.h>
 #include <common/testing/gpu_reduction_ogita.h>
 #include <generate_vector_pair.hpp>
@@ -101,7 +101,14 @@ int main(int argc, char const *argv[])
 
     T norm_u1 = g_vecs.norm(u1_d);
     T norm_u2 = g_vecs.norm(u2_d);
+    g_vecs.use_high_precision();
+    T norm_u1_o = g_vecs.norm(u1_d);
+    T norm_u2_o = g_vecs.norm(u2_d);
+    g_vecs.use_standard_precision();
     printf("||u1|| = %.24le, ||u2|| = %.24le \n", double(norm_u1), double(norm_u2) );
+    printf("||u1||o= %.24le, ||u2||o= %.24le \n", double(norm_u1_o), double(norm_u2_o) );
+    printf("  err1 = %.24le,   err2 = %.24le \n", double(std::abs(norm_u1_o - norm_u1)), double(std::abs(norm_u2_o - norm_u2)) );
+
 // save to host 
     g_vecs.get(u1_d, u1_c);
     g_vecs.get(u2_d, u2_c);
@@ -144,12 +151,15 @@ int main(int argc, char const *argv[])
         printf("dot_Ct= %.24le, time_wall = %lf ms\n", double(dot_prod_C_th), double(elapsed_mseconds) );
         
 
+        g_vecs.use_high_precision();
         start_ch = std::chrono::steady_clock::now();
-        T dot_prod_ogita_G = reduciton_ogita.dot(u1_d, u2_d);
+        //T dot_prod_ogita_G = reduciton_ogita.dot(u1_d, u2_d);
+        T dot_prod_ogita_G = g_vecs.scalar_prod(u1_d, u2_d);
         cudaDeviceSynchronize();
         finish_ch = std::chrono::steady_clock::now();
         elapsed_mseconds = std::chrono::duration<double, std::milli>(finish_ch - start_ch).count();        
         printf("dot_OG= %.24le, time_wall = %lf ms\n", double(dot_prod_ogita_G), elapsed_mseconds);
+        g_vecs.use_standard_precision();
 
         if(use_ref)
         {

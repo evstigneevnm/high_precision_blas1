@@ -3,6 +3,7 @@
 
 #include <cmath>
 #include <common/dot_product.h>
+#include <common/threaded_reduction.h>
 
 template <typename T>
 struct cpu_vector_operations
@@ -14,17 +15,29 @@ struct cpu_vector_operations
     bool location;
     size_t sz_;    
     dot_product<T>* dot = nullptr;
+    threaded_reduction<scalar_type, vector_type>* threaded_dot = nullptr;
+    int use_threaded_dot = 0;
 
-    cpu_vector_operations(size_t sz, int use_high_precision_dot_product_ = 0):
-    sz_(sz)
+    cpu_vector_operations(size_t sz, int use_high_precision_dot_product_ = 0, int use_threaded_dot_ = 0):
+    sz_(sz),
+    use_threaded_dot(use_threaded_dot_)
     {
         location=false;
         dot = new dot_product<T>(sz, use_high_precision_dot_product_);
+        threaded_dot = new threaded_reduction<scalar_type, vector_type>(sz_, use_threaded_dot_, use_high_precision_dot_product_);
+
     }
     ~cpu_vector_operations()
     {
         if(dot!=nullptr)
+        {
             delete dot;
+        }
+
+        if(threaded_dot!=nullptr)
+        {
+            delete threaded_dot;
+        }
     }
 
     size_t get_vector_size()
@@ -75,16 +88,34 @@ struct cpu_vector_operations
         //     res += x[i]*y[i];
         // }        
         // return res;
-        if(use_high_prec_ == 1)
-        {
-            dot->use_high_prec();
-        }
-        if(use_high_prec_ == 0)
-        {
-            dot->use_normal_prec();
-        }
+        scalar_type dot_res = T(0.0);
 
-        return dot->dot(x, y);
+        if (use_threaded_dot == 0)
+        {
+            if(use_high_prec_ == 1)
+            {
+                dot->use_high_prec();
+            }
+            if(use_high_prec_ == 0)
+            {
+                dot->use_normal_prec();
+            }
+            dot_res = dot->dot(x, y);
+        }
+        else
+        {
+            if(use_high_prec_ == 1)
+            {
+                threaded_dot->use_high_prec();
+            }
+            if(use_high_prec_ == 0)
+            {
+                threaded_dot->use_normal_prec();
+            }
+            dot_res = threaded_dot->dot(x, y);            
+        }
+        return dot_res;
+
     }
     scalar_type norm(const vector_type &x)const
     {

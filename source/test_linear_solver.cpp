@@ -26,9 +26,9 @@ void write_convergency(const std::string &fn, const std::vector<std::pair<int,T>
 int main(int argc, char const *argv[])
 {
 
-    if (argc < 13) {
-        std::cout << "USAGE: " << std::string(argv[0]) << " <mesh_sz> <a> <re> <max_iters> <rel_tol> <use_precond_resid> <use_real_resid> <basis_sz> <lin_solver_type> <result_fn> <convergency_fn> <use_high_precision_dot_prod (1/0)>"  << std::endl;
-        std::cout << "EXAMPLE: " << std::string(argv[0]) << " 100 1. 100. 100 1e-7 1 0 2 0 test_out.dat conv_out.dat 0"  << std::endl;
+    if (argc < 14) {
+        std::cout << "USAGE: " << std::string(argv[0]) << " <mesh_sz> <a> <re> <max_iters> <rel_tol> <use_precond_resid> <use_real_resid> <basis_sz> <lin_solver_type> <result_fn> <convergency_fn> <use_high_precision_dot_prod (1/0)> <use_threaded_dot (n/0) with n-threads> "  << std::endl;
+        std::cout << "EXAMPLE: " << std::string(argv[0]) << " 100 1. 100. 100 1e-7 1 0 2 0 test_out.dat conv_out.dat 0 0"  << std::endl;
         return 0;
     }
     std::string             res_fn(argv[10]), conv_fn(argv[11]);
@@ -42,6 +42,7 @@ int main(int argc, char const *argv[])
     int                     basis_sz = atoi(argv[8]);
     int                     lin_solver_type = atoi(argv[9]); 
     int                     use_high_precision_dot_prod = atoi(argv[12]);
+    int                     use_threaded_dot_prod = atoi(argv[13]);
 
     using vec_ops_t = cpu_vector_operations<T>;
     using T_vec = typename vec_ops_t::vector_type;
@@ -56,7 +57,7 @@ int main(int argc, char const *argv[])
     using gmres_t = numerical_algos::lin_solvers::gmres<sys_op_t,precond_t,vec_ops_t,mon_t,log_t>;
 
 
-    vec_ops_t vec_ops(sz, use_high_precision_dot_prod);
+    vec_ops_t vec_ops(sz, use_high_precision_dot_prod, use_threaded_dot_prod);
     sys_op_t sys_op(&vec_ops, a, re);
     precond_t prec;
     log_t log;    
@@ -73,6 +74,7 @@ int main(int argc, char const *argv[])
     else if(lin_solver_type == 1)
     {
         mon = &gmres.monitor();
+        gmres.set_reorthogonalization(false);
         std::cout << "using gmres with " << basis_sz << " restarts" << std::endl;    
     }
     else if(lin_solver_type == 2)

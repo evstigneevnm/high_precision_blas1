@@ -21,6 +21,8 @@ struct __GPU_REDUCTION_OGITA_H__SharedMemory
         return (T *)__smem;
     }
 };
+
+//Dynamic shared memory specialization
 template<>
 struct __GPU_REDUCTION_OGITA_H__SharedMemory<double>
 {
@@ -51,8 +53,40 @@ struct __GPU_REDUCTION_OGITA_H__SharedMemory<float>
         return (float *)__smem_f;
     }
 };
+template<>
+struct __GPU_REDUCTION_OGITA_H__SharedMemory< thrust::complex<float> >
+{
+    __device__ inline operator       thrust::complex<float> *()
+    {
+        extern __shared__ thrust::complex<float>(__smem_C[]);
+        return (thrust::complex<float> *) __smem_C;
+    }
+
+    __device__ inline operator const thrust::complex<float> *() const
+    {
+        extern __shared__ thrust::complex<float>(__smem_C[]);
+        return (thrust::complex<float> *) __smem_C;
+    }
+};
+template<>
+struct __GPU_REDUCTION_OGITA_H__SharedMemory< thrust::complex<double> >
+{
+    __device__ inline operator       thrust::complex<double> *()
+    {
+        extern __shared__ thrust::complex<double>(__smem_Z[]);
+        return (thrust::complex<double> *) __smem_Z;
+    }
+
+    __device__ inline operator const thrust::complex<double> *() const
+    {
+        extern __shared__ thrust::complex<double>(__smem_Z[]);
+        return (thrust::complex<double> *) __smem_Z;
+    }
+};
 
 
+
+//this needs specialization for complex, since no fma exist for thrust/complex
 template<class T>
 __device__ inline T __GPU_REDUCTION_OGITA_H__two_prod_device(T &t, T a, T b)
 {
@@ -72,7 +106,7 @@ __device__ inline T __GPU_REDUCTION_OGITA_H__two_sum_device(T &t, T a, T b)
 }
 
 template<class T>
-__device__ T inline cuda_abs(T val)
+__device__ typename gpu_reduction_ogita_type::type_complex_cast<T>::norm_type inline cuda_abs(T val)
 {
 }
 template<>
@@ -85,6 +119,18 @@ __device__ float inline cuda_abs(float val)
 {
     return( fabsf(val) );
 }
+template<>
+__device__ double inline cuda_abs(thrust::complex<double> val)
+{
+    
+    return( abs(val) ); // in thrust/arithmetic.h: inline ValueType abs(const complex<ValueType>& z)
+}
+template<>
+__device__ float inline cuda_abs(thrust::complex<float> val)
+{
+    return( abs(val) ); // in thrust/arithmetic.h: inline ValueType abs(const complex<ValueType>& z)
+}
+
 
 template <class T, class T_vec, unsigned int blockSize, bool nIsPow2, bool first_run>
 __global__ void reduce_asum_ogita_kernel(const T_vec g_idata, T_vec g_odata, T_vec err_data, int n)
@@ -116,7 +162,6 @@ __global__ void reduce_asum_ogita_kernel(const T_vec g_idata, T_vec g_odata, T_v
         main_sum = __GPU_REDUCTION_OGITA_H__two_sum_device(error_local, main_sum, cuda_abs<T>(g_idata[i]) );
         error_sum += error_local + err_data[i];
 
-        // printf("%i %i %le %le %le %le\n", blockIdx.x, i, main_sum, g_idata[i], error_local, error_sum);
         // ensure we don't read out of bounds -- this is optimized away for powerOf2 sized arrays
         if (nIsPow2 || i + blockSize < n)
         {
@@ -128,23 +173,18 @@ __global__ void reduce_asum_ogita_kernel(const T_vec g_idata, T_vec g_odata, T_v
             main_sum = __GPU_REDUCTION_OGITA_H__two_sum_device(error_local, main_sum, cuda_abs<T>(g_idata[i+blockSize]) );
             error_sum += error_local + err_data[i+blockSize];            
             //main_sum += g_idata[i+blockSize];
-            // printf("%i %i %le %le %le %le\n", blockIdx.x, i + blockSize, main_sum, g_idata[i+blockSize], error_local, error_sum);
-            //printf("i+bs = %i\n", i+blockSize);
+
         }
-        // else
-            // printf("i = %i\n", i);
                 
 
         i += gridSize;
     }
 
     // each thread puts its local sum into shared memory
-    //printf("%i %.24le\n", n, error_sum);
     sdata[tid] = main_sum;
     cdata[tid] = error_sum;
     __syncthreads();
-    // printf("%i %le %le\n", tid, sdata[tid], cdata[tid]);
-    // __syncthreads();
+
 
     // do reduction in shared mem
     if (blockSize >= 1024)
@@ -173,12 +213,11 @@ __global__ void reduce_asum_ogita_kernel(const T_vec g_idata, T_vec g_odata, T_v
 
             error_sum += error_local + cdata[tid + 256];//__GPU_REDUCTION_OGITA_H__two_sum_device(error_l2, error_sum, cdata[tid + 256]);
             cdata[tid] = error_sum;// + error_l2;
-            // printf("512\n");
-            // printf("tid = %i %le<%le %le<(%le+%le)\n", tid, main_sum, sdata[tid+ 256], error_sum, cdata[tid+ 256], error_local);
+
         }
 
         __syncthreads();
-        // printf("%i %le %le\n", tid, main_sum, error_sum);
+        
     }
 
     if (blockSize >= 256)
@@ -192,8 +231,7 @@ __global__ void reduce_asum_ogita_kernel(const T_vec g_idata, T_vec g_odata, T_v
 
             error_sum += error_local + cdata[tid + 128]; //__GPU_REDUCTION_OGITA_H__two_sum_device(error_l2, error_sum, cdata[tid + 128]);
             cdata[tid] = error_sum;// + error_l2;
-            // printf("256\n");
-            // printf("tid = %i %le<%le %le<(%le+%le)\n", tid, main_sum, sdata[tid+ 128], error_sum, cdata[tid+ 128], error_local);
+
         }
 
         __syncthreads();
@@ -210,8 +248,7 @@ __global__ void reduce_asum_ogita_kernel(const T_vec g_idata, T_vec g_odata, T_v
 
             error_sum += error_local + cdata[tid + 64];//__GPU_REDUCTION_OGITA_H__two_sum_device(error_l2, error_sum, cdata[tid + 64]);
             cdata[tid] = error_sum;// + error_l2;  
-            // printf("128\n"); 
-            // printf("tid = %i %le<%le %le<(%le+%le)\n", tid, main_sum, sdata[tid+ 64], error_sum, cdata[tid+ 64], error_local);    
+ 
         }
 
         __syncthreads();
@@ -235,8 +272,6 @@ __global__ void reduce_asum_ogita_kernel(const T_vec g_idata, T_vec g_odata, T_v
             
             error_sum += error_local + cmem[tid + 32];//__GPU_REDUCTION_OGITA_H__two_sum_device(error_l2, error_sum, cmem[tid + 32]);
             cmem[tid] = error_sum;// + error_l2;          
-            // printf("64\n");
-            // printf("tid = %i %le<%le %le<(%le+%le)\n", tid, main_sum, smem[tid+ 32], error_sum, cmem[tid+ 32], error_local);
         }
 
         if (blockSize >=  32)
@@ -249,8 +284,6 @@ __global__ void reduce_asum_ogita_kernel(const T_vec g_idata, T_vec g_odata, T_v
 
             error_sum += error_local + cmem[tid + 16];//__GPU_REDUCTION_OGITA_H__two_sum_device(error_l2, error_sum, cmem[tid + 16]);
             cmem[tid] = error_sum;// + error_l2;   
-            // printf("32\n");      
-            // printf("tid = %i %le<%le %le<(%le+%le)\n", tid, main_sum, smem[tid+ 16], error_sum, cmem[tid+ 16], error_local);
         }
 
         if (blockSize >=  16)
@@ -262,9 +295,7 @@ __global__ void reduce_asum_ogita_kernel(const T_vec g_idata, T_vec g_odata, T_v
             smem[tid] = main_sum;
 
             error_sum += error_local + cmem[tid + 8];//__GPU_REDUCTION_OGITA_H__two_sum_device(error_l2, error_sum, cmem[tid + 8]);
-            cmem[tid] = error_sum;// + error_l2;      
-            // printf("16\n");   
-            // printf("tid = %i %le<%le %le<(%le+%le)\n", tid, main_sum, smem[tid+ 8], error_sum, cmem[tid+ 8], error_local);            
+            cmem[tid] = error_sum;// + error_l2;                
         }
 
         if (blockSize >=   8)
@@ -277,8 +308,6 @@ __global__ void reduce_asum_ogita_kernel(const T_vec g_idata, T_vec g_odata, T_v
 
             error_sum += error_local + cmem[tid + 4];//__GPU_REDUCTION_OGITA_H__two_sum_device(error_l2, error_sum, cmem[tid + 4]);
             cmem[tid] = error_sum;// + error_l2;      
-            // printf("8\n");   
-            // printf("tid = %i %le<%le %le<(%le+%le) %le\n", tid, main_sum, smem[tid + 4], error_sum, cmem[tid + 4], error_local, cmem[tid]); 
         }
 
         if (blockSize >=   4)
@@ -291,8 +320,6 @@ __global__ void reduce_asum_ogita_kernel(const T_vec g_idata, T_vec g_odata, T_v
 
             error_sum += error_local + cmem[tid + 2];//__GPU_REDUCTION_OGITA_H__two_sum_device(error_l2, error_sum, cmem[tid + 2]);
             cmem[tid] = error_sum;// + error_l2;  
-            // printf("4\n");       
-            // printf("tid = %i %le<%le %le<(%le+%le) %le\n", tid, main_sum, smem[tid + 2], error_sum, cmem[tid + 2], error_local, cmem[tid]);
         }
 
         if (blockSize >=   2)
@@ -305,8 +332,7 @@ __global__ void reduce_asum_ogita_kernel(const T_vec g_idata, T_vec g_odata, T_v
 
             error_sum += error_local + cmem[tid + 1];//__GPU_REDUCTION_OGITA_H__two_sum_device(error_l2, error_sum, cmem[tid + 1]);
             cmem[tid] = error_sum;// + error_l2;  
-            // printf("2\n"); 
-            // printf("tid = %i %le<%le %le<(%le+%le) %le\n", tid, main_sum, smem[tid + 1], error_sum, cmem[tid + 1], error_local, cmem[tid]);      
+  
         }
     }
 
@@ -315,8 +341,6 @@ __global__ void reduce_asum_ogita_kernel(const T_vec g_idata, T_vec g_odata, T_v
     {
         g_odata[blockIdx.x] =  sdata[0];
         err_data[blockIdx.x] = cdata[0];
-        // printf("=====\n");
-        // printf("tid = %i %le %le\n", tid, g_odata[blockIdx.x], err_data[blockIdx.x]);
     }
 }
 
@@ -584,6 +608,7 @@ __global__ void reduce_dot_ogita_kernel(const T_vec g_idata1, const T_vec g_idat
         // main_sum += g_idata1[i]*g_idata2[i];
         T res_l = __GPU_REDUCTION_OGITA_H__two_prod_device(error_local_prod, g_idata1[i], g_idata2[i]);
         main_sum = __GPU_REDUCTION_OGITA_H__two_sum_device(error_local, main_sum, res_l);
+        
         error_sum += error_local_prod + error_local + err_data[i];        
         // printf("%i : %le < %le %le %le %le \n", i, main_sum, g_idata1[i], g_idata2[i], error_local_prod, error_local);
         // ensure we don't read out of bounds -- this is optimized away for powerOf2 sized arrays
@@ -608,8 +633,6 @@ __global__ void reduce_dot_ogita_kernel(const T_vec g_idata1, const T_vec g_idat
     sdata[tid] = main_sum;
     cdata[tid] = error_sum;
     __syncthreads();
-    // printf("%i %le %le\n", tid, sdata[tid], cdata[tid]);
-    // __syncthreads();
 
 
     // do reduction in shared mem
@@ -622,8 +645,7 @@ __global__ void reduce_dot_ogita_kernel(const T_vec g_idata1, const T_vec g_idat
             sdata[tid] = main_sum;
 
             error_sum += error_local + cdata[tid + 512];
-            cdata[tid] = error_sum;
-            // printf("1024\n");            
+            cdata[tid] = error_sum;         
         }
 
         __syncthreads();
@@ -932,11 +954,9 @@ template<class T, class T_vec, int BLOCK_SIZE, int threads_r>
 void gpu_reduction_ogita<T, T_vec, BLOCK_SIZE, threads_r>::wrapper_reduce_sum(int blocks, int threads, int smemSize, const T_vec InputV, T_vec OutputV, T_vec errV, int N, bool first_run)
 {
 
-    // std::cout << "smemSize = " << smemSize << " threads = " << threads<< std::endl;
-
     dim3 dimBlock(threads, 1, 1);
     dim3 dimGrid(blocks, 1, 1);
-    // printf("smemSize = %i, threads = %i, first_run = %d\n", smemSize, threads, first_run);
+
     
     if(isPow2(N))
     {

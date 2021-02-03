@@ -5,9 +5,9 @@ GCC = /usr/bin/gcc
 GPP = /usr/bin/g++
 GCC_kern = /usr/bin/gcc-5
 
-NVCCFLAGS = -Wno-deprecated-gpu-targets -g -arch=sm_35 -std=c++11 -ccbin=gcc-5
+NVCCFLAGS = -Wno-deprecated-gpu-targets -g -arch=sm_35 -std=c++11 -ccbin=g++-5
 LIBFLAGS = --compiler-options -fPIC
-GCCFLAGS = -g -std=c++11
+GCCFLAGS = -g -std=c++11 -pthread
 GCCFLAGS_R = -O3 -std=c++11 -pthread
 GCCFLAGS_RN = -O3 -std=c++11 -Xcompiler -pthread
 ICUDA = -I/usr/local/cuda/include
