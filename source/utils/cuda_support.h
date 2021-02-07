@@ -58,7 +58,11 @@ inline int init_cuda(int PCI_ID)
                 printf( "#%i:   %s, pci-bus id:%i %i %i \n", i, (char*)&deviceProp,deviceProp.pciBusID,deviceProp.pciDeviceID,deviceProp.pciDomainID);
             }            
             printf("Device number for it to use>>>\n");
-            scanf("%i", &deviceNumberTemp);
+            int num_scanded = scanf("%i", &deviceNumberTemp);
+            if(num_scanded == 0)
+            {
+                throw(std::runtime_error("incorrect Device number provided!"));
+            }
             
         }
         else

@@ -53,6 +53,8 @@ struct __GPU_REDUCTION_OGITA_H__SharedMemory<float>
         return (float *)__smem_f;
     }
 };
+
+
 template<>
 struct __GPU_REDUCTION_OGITA_H__SharedMemory< thrust::complex<float> >
 {
@@ -105,9 +107,96 @@ __device__ inline T __GPU_REDUCTION_OGITA_H__two_sum_device(T &t, T a, T b)
     return s;
 }
 
-template<class T>
-__device__ typename gpu_reduction_ogita_type::type_complex_cast<T>::norm_type inline cuda_abs(T val)
+
+template<>
+__device__ inline thrust::complex<float> __GPU_REDUCTION_OGITA_H__two_prod_device(thrust::complex<float> &t, thrust::complex<float> a, thrust::complex<float> b)
 {
+    using T_real = float;
+    using TC = typename thrust::complex<float>;
+    // T p = a*b;
+    // t = fma(a, b, -p);
+    // return p;
+    TC a_conj = conj(a);
+
+    T_real a_R = a_conj.real();
+    T_real a_I = a_conj.imag();
+    T_real b_R = b.real();
+    T_real b_I = b.imag();
+
+    T_real p_R1 = a_R*b_R;
+    T_real t_R1 = fma(a_R, b_R, -p_R1);
+    T_real p_R2 = a_I*b_I;
+    T_real t_R2 = fma(a_R, b_R, -p_R2);
+    T_real p_I1 = a_R*b_I;
+    T_real t_I1 = fma(a_R, b_I, -p_I1);
+    T_real p_I2 = a_I*b_R;
+    T_real t_I2 = fma(a_I, b_R, -p_I2);
+
+    T_real t1 = T_real(0.0);
+    T_real t2 = T_real(0.0);
+    T_real p_R = __GPU_REDUCTION_OGITA_H__two_sum_device(t1, p_R1, p_R2);
+    T_real p_I = __GPU_REDUCTION_OGITA_H__two_sum_device(t2, p_I1, p_I2);
+    
+    TC p = TC(p_R, p_I);
+    
+    t = TC(t_R1 + t_R2 + t1, t_I1 + t_I2 + t2);
+
+    return p;    
+}
+template<>
+__device__ inline thrust::complex<double> __GPU_REDUCTION_OGITA_H__two_prod_device(thrust::complex<double> &t, thrust::complex<double> a, thrust::complex<double> b)
+{
+    using T_real = double;
+    using TC = typename thrust::complex<double>;
+    // T p = a*b;
+    // t = fma(a, b, -p);
+    // return p;
+
+    T_real a_R = a.real();
+    T_real a_I = a.imag();
+    T_real b_R = b.real();
+    T_real b_I = b.imag();
+
+    T_real p_R1 = a_R*b_R;
+    T_real t_R1 = fma(a_R, b_R, -p_R1);
+    T_real p_R2 = a_I*b_I;
+    T_real t_R2 = fma(a_I, b_I, -p_R2);
+    T_real p_I1 = a_R*b_I;
+    T_real t_I1 = fma(a_R, b_I, -p_I1);
+    T_real p_I2 = a_I*b_R;
+    T_real t_I2 = fma(a_I, b_R, -p_I2);
+
+    T_real t1 = T_real(0.0);
+    T_real t2 = T_real(0.0);
+    T_real p_R = __GPU_REDUCTION_OGITA_H__two_sum_device(t1, p_R1, p_R2);
+    T_real p_I = __GPU_REDUCTION_OGITA_H__two_sum_device(t2, p_I1, -p_I2);
+ 
+    TC p = TC(p_R, p_I);
+    
+    t = TC(t_R1 + t_R2 + t1, t_I1 + t_I2 + t2);
+
+    // printf("p_R1 = %le, p_R2 = %le\n", p_R1, p_R2 );
+    return p;    
+}
+
+
+
+template<class T>
+__device__ inline T __GPU_REDUCTION_OGITA_H__two_sum_device(T &t, T a, typename gpu_reduction_ogita_type::type_complex_cast<T>::T b)
+{
+    T s = a+T(b);
+    T bs = s-a;
+    T as = s-bs;
+    t = (T(b)-bs) + (a-as);
+    return s;
+}
+
+
+
+template<class T>
+__device__ typename gpu_reduction_ogita_type::type_complex_cast<T>::T inline cuda_abs(T val)
+{
+    return( abs(val) );
 }
 template<>
 __device__ double inline cuda_abs(double val)
@@ -119,22 +208,13 @@ __device__ float inline cuda_abs(float val)
 {
     return( fabsf(val) );
 }
-template<>
-__device__ double inline cuda_abs(thrust::complex<double> val)
-{
-    
-    return( abs(val) ); // in thrust/arithmetic.h: inline ValueType abs(const complex<ValueType>& z)
-}
-template<>
-__device__ float inline cuda_abs(thrust::complex<float> val)
-{
-    return( abs(val) ); // in thrust/arithmetic.h: inline ValueType abs(const complex<ValueType>& z)
-}
+
 
 
 template <class T, class T_vec, unsigned int blockSize, bool nIsPow2, bool first_run>
 __global__ void reduce_asum_ogita_kernel(const T_vec g_idata, T_vec g_odata, T_vec err_data, int n)
 {
+
     T *sdata = __GPU_REDUCTION_OGITA_H__SharedMemory<T>();
     T *cdata = &__GPU_REDUCTION_OGITA_H__SharedMemory<T>()[blockSize];
 
@@ -259,8 +339,8 @@ __global__ void reduce_asum_ogita_kernel(const T_vec g_idata, T_vec g_odata, T_v
         // now that we are using warp-synchronous programming (below)
         // we need to declare our shared memory volatile so that the compiler
         // doesn't reorder stores to it and induce incorrect behavior.
-        volatile T *smem = sdata;
-        volatile T *cmem = cdata;
+        T *smem = sdata;
+        T *cmem = cdata;
 
         if (blockSize >=  64)
         {
@@ -273,7 +353,7 @@ __global__ void reduce_asum_ogita_kernel(const T_vec g_idata, T_vec g_odata, T_v
             error_sum += error_local + cmem[tid + 32];//__GPU_REDUCTION_OGITA_H__two_sum_device(error_l2, error_sum, cmem[tid + 32]);
             cmem[tid] = error_sum;// + error_l2;          
         }
-
+        __syncthreads();
         if (blockSize >=  32)
         {
             // main_sum = main_sum + smem[tid + 16];
@@ -285,7 +365,7 @@ __global__ void reduce_asum_ogita_kernel(const T_vec g_idata, T_vec g_odata, T_v
             error_sum += error_local + cmem[tid + 16];//__GPU_REDUCTION_OGITA_H__two_sum_device(error_l2, error_sum, cmem[tid + 16]);
             cmem[tid] = error_sum;// + error_l2;   
         }
-
+        __syncthreads();
         if (blockSize >=  16)
         {
             // main_sum = main_sum + smem[tid +  8];
@@ -297,7 +377,7 @@ __global__ void reduce_asum_ogita_kernel(const T_vec g_idata, T_vec g_odata, T_v
             error_sum += error_local + cmem[tid + 8];//__GPU_REDUCTION_OGITA_H__two_sum_device(error_l2, error_sum, cmem[tid + 8]);
             cmem[tid] = error_sum;// + error_l2;                
         }
-
+        __syncthreads();
         if (blockSize >=   8)
         {
             // main_sum = main_sum + smem[tid +  4];
@@ -309,7 +389,7 @@ __global__ void reduce_asum_ogita_kernel(const T_vec g_idata, T_vec g_odata, T_v
             error_sum += error_local + cmem[tid + 4];//__GPU_REDUCTION_OGITA_H__two_sum_device(error_l2, error_sum, cmem[tid + 4]);
             cmem[tid] = error_sum;// + error_l2;      
         }
-
+        __syncthreads();
         if (blockSize >=   4)
         {
             // main_sum = main_sum + smem[tid +  2];
@@ -321,7 +401,7 @@ __global__ void reduce_asum_ogita_kernel(const T_vec g_idata, T_vec g_odata, T_v
             error_sum += error_local + cmem[tid + 2];//__GPU_REDUCTION_OGITA_H__two_sum_device(error_l2, error_sum, cmem[tid + 2]);
             cmem[tid] = error_sum;// + error_l2;  
         }
-
+        __syncthreads();
         if (blockSize >=   2)
         {
             // main_sum = main_sum + smem[tid +  1];
@@ -334,6 +414,7 @@ __global__ void reduce_asum_ogita_kernel(const T_vec g_idata, T_vec g_odata, T_v
             cmem[tid] = error_sum;// + error_l2;  
   
         }
+        __syncthreads();
     }
 
     // write result for this block to global mem
@@ -342,6 +423,7 @@ __global__ void reduce_asum_ogita_kernel(const T_vec g_idata, T_vec g_odata, T_v
         g_odata[blockIdx.x] =  sdata[0];
         err_data[blockIdx.x] = cdata[0];
     }
+
 }
 
 template <class T, class T_vec, unsigned int blockSize, bool nIsPow2, bool first_run>
@@ -480,8 +562,8 @@ __global__ void reduce_sum_ogita_kernel(const T_vec g_idata, T_vec g_odata, T_ve
         // now that we are using warp-synchronous programming (below)
         // we need to declare our shared memory volatile so that the compiler
         // doesn't reorder stores to it and induce incorrect behavior.
-        volatile T *smem = sdata;
-        volatile T *cmem = cdata;
+        T *smem = sdata;
+        T *cmem = cdata;
 
         if (blockSize >=  64)
         {
@@ -495,6 +577,7 @@ __global__ void reduce_sum_ogita_kernel(const T_vec g_idata, T_vec g_odata, T_ve
             cmem[tid] = error_sum;// + error_l2;          
             // printf("64\n");
             // printf("tid = %i %le<%le %le<(%le+%le)\n", tid, main_sum, smem[tid+ 32], error_sum, cmem[tid+ 32], error_local);
+            __syncthreads();
         }
 
         if (blockSize >=  32)
@@ -509,6 +592,7 @@ __global__ void reduce_sum_ogita_kernel(const T_vec g_idata, T_vec g_odata, T_ve
             cmem[tid] = error_sum;// + error_l2;   
             // printf("32\n");      
             // printf("tid = %i %le<%le %le<(%le+%le)\n", tid, main_sum, smem[tid+ 16], error_sum, cmem[tid+ 16], error_local);
+            __syncthreads();
         }
 
         if (blockSize >=  16)
@@ -523,6 +607,7 @@ __global__ void reduce_sum_ogita_kernel(const T_vec g_idata, T_vec g_odata, T_ve
             cmem[tid] = error_sum;// + error_l2;      
             // printf("16\n");   
             // printf("tid = %i %le<%le %le<(%le+%le)\n", tid, main_sum, smem[tid+ 8], error_sum, cmem[tid+ 8], error_local);            
+            __syncthreads();
         }
 
         if (blockSize >=   8)
@@ -537,6 +622,7 @@ __global__ void reduce_sum_ogita_kernel(const T_vec g_idata, T_vec g_odata, T_ve
             cmem[tid] = error_sum;// + error_l2;      
             // printf("8\n");   
             // printf("tid = %i %le<%le %le<(%le+%le) %le\n", tid, main_sum, smem[tid + 4], error_sum, cmem[tid + 4], error_local, cmem[tid]); 
+            __syncthreads();
         }
 
         if (blockSize >=   4)
@@ -551,6 +637,7 @@ __global__ void reduce_sum_ogita_kernel(const T_vec g_idata, T_vec g_odata, T_ve
             cmem[tid] = error_sum;// + error_l2;  
             // printf("4\n");       
             // printf("tid = %i %le<%le %le<(%le+%le) %le\n", tid, main_sum, smem[tid + 2], error_sum, cmem[tid + 2], error_local, cmem[tid]);
+            __syncthreads();
         }
 
         if (blockSize >=   2)
@@ -565,7 +652,9 @@ __global__ void reduce_sum_ogita_kernel(const T_vec g_idata, T_vec g_odata, T_ve
             cmem[tid] = error_sum;// + error_l2;  
             // printf("2\n"); 
             // printf("tid = %i %le<%le %le<(%le+%le) %le\n", tid, main_sum, smem[tid + 1], error_sum, cmem[tid + 1], error_local, cmem[tid]);      
+            __syncthreads();
         }
+
     }
 
     // write result for this block to global mem
@@ -700,8 +789,8 @@ __global__ void reduce_dot_ogita_kernel(const T_vec g_idata1, const T_vec g_idat
         // now that we are using warp-synchronous programming (below)
         // we need to declare our shared memory volatile so that the compiler
         // doesn't reorder stores to it and induce incorrect behavior.
-        volatile T *smem = sdata;
-        volatile T *cmem = cdata;
+        T *smem = sdata;
+        T *cmem = cdata;
 
         if (blockSize >=  64)
         {
@@ -711,6 +800,7 @@ __global__ void reduce_dot_ogita_kernel(const T_vec g_idata1, const T_vec g_idat
 
             error_sum += error_local + cmem[tid + 32];
             cmem[tid] = error_sum;
+            __syncthreads();
         }
 
         if (blockSize >=  32)
@@ -721,6 +811,7 @@ __global__ void reduce_dot_ogita_kernel(const T_vec g_idata1, const T_vec g_idat
 
             error_sum += error_local + cmem[tid + 16];
             cmem[tid] = error_sum;            
+            __syncthreads();
         }
 
         if (blockSize >=  16)
@@ -731,6 +822,7 @@ __global__ void reduce_dot_ogita_kernel(const T_vec g_idata1, const T_vec g_idat
 
             error_sum += error_local + cmem[tid + 8];
             cmem[tid] = error_sum;            
+            __syncthreads();
         }
 
         if (blockSize >=   8)
@@ -741,6 +833,7 @@ __global__ void reduce_dot_ogita_kernel(const T_vec g_idata1, const T_vec g_idat
 
             error_sum += error_local + cmem[tid + 4];
             cmem[tid] = error_sum;            
+            __syncthreads();
         }
 
         if (blockSize >=   4)
@@ -751,6 +844,7 @@ __global__ void reduce_dot_ogita_kernel(const T_vec g_idata1, const T_vec g_idat
 
             error_sum += error_local + cmem[tid + 2];
             cmem[tid] = error_sum;            
+            __syncthreads();
         }
 
         if (blockSize >=   2)
@@ -761,7 +855,9 @@ __global__ void reduce_dot_ogita_kernel(const T_vec g_idata1, const T_vec g_idat
 
             error_sum += error_local + cmem[tid + 1];
             cmem[tid] = error_sum;                  
+            __syncthreads();        
         }
+        
     }
 
     // write result for this block to global mem
@@ -1290,9 +1386,9 @@ T gpu_reduction_ogita<T, T_vec, BLOCK_SIZE, threads_r>::reduction_sum(int N, con
         get_blocks_threads_shmem(s, maxBlocks, blocks, threads, smemSize);
         // printf("s = %i, threads=%i, blocks=%i, shmem size=%i\n",s, threads, blocks, smemSize);
         if(use_abs_)
-            wrapper_reduce_sum(blocks, threads, smemSize, OutputV, OutputV, errV, s, false);
-        else
             wrapper_reduce_asum(blocks, threads, smemSize, OutputV, OutputV, errV, s, false);
+        else
+            wrapper_reduce_sum(blocks, threads, smemSize, OutputV, OutputV, errV, s, false);
 
         s = (s + (threads*2-1)) / (threads*2);
     }
@@ -1306,7 +1402,7 @@ T gpu_reduction_ogita<T, T_vec, BLOCK_SIZE, threads_r>::reduction_sum(int N, con
         T tt = T(0.0);
         for (int i=0; i < s; i++)
         {
-            gpu_result = two_sum_device(tt, gpu_result, Output[i]);
+            gpu_result = two_sum_(tt, gpu_result, Output[i]);
             gpu_err += tt + err[i];
         }
         needReadBack = false;
@@ -1318,10 +1414,9 @@ T gpu_reduction_ogita<T, T_vec, BLOCK_SIZE, threads_r>::reduction_sum(int N, con
         device_2_host_cpy<T>(&gpu_err, errV, 1);
     }
 
-    long double gpu_res_long = (long double)gpu_result + (long double)gpu_err;
-    // printf(" gpu_result = %.24le\n gpu_err = %.24le\n gpu_lsum= %.24Le\n", gpu_result, gpu_err, gpu_res_long);
-    gpu_result = T(gpu_res_long);
-    return(gpu_result);
+    T gpu_res_long = gpu_result + gpu_err;
+    // printf(" gpu_result = %.24le\n gpu_err = %.24le\n gpu_lsum= %.24le\n", gpu_result, gpu_err, gpu_res_long);
+    return(gpu_res_long);
 }
 
 
@@ -1357,7 +1452,7 @@ T gpu_reduction_ogita<T, T_vec, BLOCK_SIZE, threads_r>::reduction_dot(int N, con
         T tt = T(0.0);
         for (int i=0; i < s; i++)
         {
-            gpu_result = two_sum_device(tt, gpu_result, Output[i]);
+            gpu_result = two_sum_(tt, gpu_result, Output[i]);
             gpu_err += tt + err[i];
         }
         needReadBack = false;
@@ -1369,11 +1464,70 @@ T gpu_reduction_ogita<T, T_vec, BLOCK_SIZE, threads_r>::reduction_dot(int N, con
         device_2_host_cpy<T>(&gpu_err, errV, 1);
     }
 
-    long double gpu_res_long = (long double)gpu_result + (long double)gpu_err;
+    gpu_result = gpu_result + gpu_err;
     // printf(" gpu_result = %.24le\n gpu_err = %.24le\n gpu_lsum= %.24Le\n", gpu_result, gpu_err, gpu_res_long);
-    gpu_result = T(gpu_res_long);
     return(gpu_result);
 }
+
+
+
+// specialization for thrust::complex<T>
+template<>
+thrust::complex<float> gpu_reduction_ogita<thrust::complex<float>, thrust::complex<float>* >::two_prod_(thrust::complex<float> &t, thrust::complex<float> a, thrust::complex<float> b)
+    {
+        
+        // p = a*b;
+        // t = std::fma(a, b, -p);
+        // return p;       
+
+        T_real a_R = a.real();
+        T_real a_I = a.imag();
+        T_real b_R = b.real();
+        T_real b_I = b.imag();
+
+        T_real p_R1 = a_R*b_R;
+        T_real t_R1 = std::fma(a_R, b_R, -p_R1);
+        T_real p_R2 = -a_I*b_I;
+        T_real t_R2 = std::fma(-a_R, b_R, p_R2);
+        T_real p_I1 = a_R*b_I;
+        T_real t_I1 = std::fma(a_R, b_I, -p_I1);
+        T_real p_I2 = a_I*b_R;
+        T_real t_I2 = std::fma(a_I, b_R, -p_I2);
+
+        t = thrust::complex<float>(t_R1 + t_R2,t_I1 + t_I2);
+        thrust::complex<float> p = thrust::complex<float>(p_R1 + p_R2, p_I1 + p_I2);
+        
+        return p;
+    }
+template<>
+thrust::complex<double> gpu_reduction_ogita<thrust::complex<double>, thrust::complex<double>* >::two_prod_(thrust::complex<double> &t, thrust::complex<double> a, thrust::complex<double> b)
+    {
+        
+        // p = a*b;
+        // t = std::fma(a, b, -p);
+        // return p;       
+
+        T_real a_R = a.real();
+        T_real a_I = a.imag();
+        T_real b_R = b.real();
+        T_real b_I = b.imag();
+
+        T_real p_R1 = a_R*b_R;
+        T_real t_R1 = std::fma(a_R, b_R, -p_R1);
+        T_real p_R2 = -a_I*b_I;
+        T_real t_R2 = std::fma(-a_R, b_R, p_R2);
+        T_real p_I1 = a_R*b_I;
+        T_real t_I1 = std::fma(a_R, b_I, -p_I1);
+        T_real p_I2 = a_I*b_R;
+        T_real t_I2 = std::fma(a_I, b_R, -p_I2);
+
+
+        t = thrust::complex<double>(t_R1 + t_R2,t_I1 + t_I2);
+        thrust::complex<double> p = thrust::complex<double>(p_R1 + p_R2, p_I1 + p_I2);
+        
+        return p;
+    }
+
 
 
 

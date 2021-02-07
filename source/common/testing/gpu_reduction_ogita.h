@@ -10,42 +10,64 @@
 
 namespace gpu_reduction_ogita_type{
 
-template<typename T>
+template<typename T_>
 struct type_complex_cast
 {
-};
-
-template<>
-struct type_complex_cast<float>
-{
-    typedef float norm_type;
-};
-
-template<>
-struct type_complex_cast<double>
-{
-    typedef double norm_type;
+    using T = T_;
 };
   
 template<>
 struct type_complex_cast< thrust::complex<float> >
 {
-    typedef float norm_type;
+    using T = float;
 };
 template<>
 struct type_complex_cast< thrust::complex<double> >
 {
-    typedef double norm_type;
+    using T = double;
 };    
 
+
+template<typename T>
+struct return_real
+{
+    using T_real = typename type_complex_cast<T>::T;
+    T_real get_real(T val)
+    {
+        return val;
+    }    
+};
+
+
+template<>
+struct return_real< thrust::complex<float> >
+{
+    using T_real = typename type_complex_cast< thrust::complex<float> >::T;
+    T_real get_real(thrust::complex<float> val)
+    {
+        return val.real();
+    }    
+};
+template<>
+struct return_real< thrust::complex<double> >
+{
+    using T_real = typename type_complex_cast< thrust::complex<double> >::T;
+    T_real get_real(thrust::complex<double> val)
+    {
+        return val.real();
+    }    
+};
+
 }
+
+
 
 
 template<class T, class T_vec, int BLOCK_SIZE = 1024, int threads_r = 64>
 class gpu_reduction_ogita
 {
 private:
-    using T_real = typename gpu_reduction_ogita_type::type_complex_cast<T>::norm_type;
+    using T_real = typename gpu_reduction_ogita_type::type_complex_cast<T>::T;
 
 public:
 
@@ -84,15 +106,23 @@ public:
         T res = reduction_sum(vec_size, d_in, vec_helper_d, vec_helper, err_helper_d, err_helper, false);
         return res;
     }
-    T asum(const T_vec d_in)
+    T_real asum(const T_vec d_in)
     {
+        gpu_reduction_ogita_type::return_real<T> get_real;
         T res = reduction_sum(vec_size, d_in, vec_helper_d, vec_helper, err_helper_d, err_helper, true);
-        return res;
+        return get_real.get_real(res);
     }
     T dot(const T_vec d1_in, const T_vec d2_in)
     {
         T res = reduction_dot(vec_size, d1_in, d2_in, vec_helper_d, vec_helper, err_helper_d, err_helper);
         return res;
+    }
+
+    T_real norm(const T_vec d_in)
+    {
+        gpu_reduction_ogita_type::return_real<T> get_real;
+        T res = reduction_dot(vec_size, d_in, d_in, vec_helper_d, vec_helper, err_helper_d, err_helper);
+        return std::sqrt( get_real.get_real(res) );
     }
 
 private:
@@ -135,7 +165,7 @@ private:
     void wrapper_reduce_dot(int blocks, int threads, int smemSize, const T_vec InputV1, const T_vec InputV2, T_vec OutputV, T_vec errV, int N, bool first_run);
 
 
-    T two_prod_device(T &t, T a, T b)
+    T two_prod_(T &t, T a, T b)
     {
         T p = a*b;
         t = std::fma(a, b, -p);
@@ -143,7 +173,7 @@ private:
     }
 
 
-    T two_sum_device(T &t, T a, T b)
+    T two_sum_(T &t, T a, T b)
     {
         T s = a+b;
         T bs = s-a;
@@ -152,7 +182,10 @@ private:
         return s;
     }
 
+
+
 };
+
 
 
 #endif

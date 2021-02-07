@@ -289,7 +289,7 @@ struct gpu_vector_operations
         Tsc result;
         if(use_high_precision_dot)
         {
-            result = std::sqrt( gpu_reduction_hp->dot(x, x) );
+            result = gpu_reduction_hp->norm(x);
         }
         else
         {
@@ -302,7 +302,7 @@ struct gpu_vector_operations
         Tsc result;
         if(use_high_precision_dot)
         {
-            result = std::sqrt( gpu_reduction_hp->dot(x, x) );
+            result = gpu_reduction_hp->norm(x);
         }
         else
         {     
@@ -321,7 +321,7 @@ struct gpu_vector_operations
         Tsc result;
         if(use_high_precision_dot)
         {
-            result = std::sqrt( gpu_reduction_hp_rank1->dot(y, y) );
+            result = gpu_reduction_hp_rank1->norm(y);
         }
         else        
         {
@@ -346,7 +346,7 @@ struct gpu_vector_operations
         Tsc result;
         if(use_high_precision_dot)
         {
-            result = std::sqrt( gpu_reduction_hp_rank1->dot(y, y) );
+            result = gpu_reduction_hp_rank1->norm(y);
         }
         else
         {

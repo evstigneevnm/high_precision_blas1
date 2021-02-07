@@ -3,7 +3,6 @@
 #include <limits>
 #include <iostream>
 #include <cstdio>
-#include <thrust/complex.h>
 #include <utils/cuda_support.h>
 #include <external_libraries/cufft_wrap.h>
 #include <external_libraries/cublas_wrap.h>
@@ -21,7 +20,6 @@ int main(int argc, char const *argv[])
 {
     
     using T = TYPE;
-    using complex = thrust::complex<T>;
     using gpu_vector_operations_t = gpu_vector_operations<T>;
     using cpu_vector_operations_t = cpu_vector_operations<T>;
     using T_vec = gpu_vector_operations_t::vector_type;
@@ -151,15 +149,15 @@ int main(int argc, char const *argv[])
         printf("dot_Ct= %.24le, time_wall = %lf ms\n", double(dot_prod_C_th), double(elapsed_mseconds) );
         
 
-        g_vecs.use_high_precision();
+        // g_vecs.use_high_precision();
         start_ch = std::chrono::steady_clock::now();
-        //T dot_prod_ogita_G = reduciton_ogita.dot(u1_d, u2_d);
-        T dot_prod_ogita_G = g_vecs.scalar_prod(u1_d, u2_d);
+        T dot_prod_ogita_G = reduciton_ogita.dot(u1_d, u2_d);
+        //T dot_prod_ogita_G = g_vecs.scalar_prod(u1_d, u2_d);
         cudaDeviceSynchronize();
         finish_ch = std::chrono::steady_clock::now();
         elapsed_mseconds = std::chrono::duration<double, std::milli>(finish_ch - start_ch).count();        
         printf("dot_OG= %.24le, time_wall = %lf ms\n", double(dot_prod_ogita_G), elapsed_mseconds);
-        g_vecs.use_standard_precision();
+        // g_vecs.use_standard_precision();
 
         if(use_ref)
         {
