@@ -42,7 +42,7 @@ struct return_real
 template<>
 struct return_real< thrust::complex<float> >
 {
-    using T_real = typename type_complex_cast< thrust::complex<float> >::T;
+    using T_real = float;//typename type_complex_cast< thrust::complex<float> >::T;
     T_real get_real(thrust::complex<float> val)
     {
         return val.real();
@@ -51,7 +51,7 @@ struct return_real< thrust::complex<float> >
 template<>
 struct return_real< thrust::complex<double> >
 {
-    using T_real = typename type_complex_cast< thrust::complex<double> >::T;
+    using T_real = double;//typename type_complex_cast< thrust::complex<double> >::T;
     T_real get_real(thrust::complex<double> val)
     {
         return val.real();

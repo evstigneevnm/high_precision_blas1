@@ -4,9 +4,9 @@ main program to test threaded and serial variations
 
 #include <iostream>
 #include <chrono>
-#include <common/threaded_dot_product.h>
+#include <common/threaded_reduction.h>
 #include <common/dot_product.h>
-#include <dot_product_gmp.hpp>
+#include <high_prec/dot_product_gmp.hpp>
 
 typedef TYPE T;
 
@@ -39,18 +39,18 @@ int main(int argc, char const *argv[])
         vec2_v[j] = val2*std::pow(1.0,(j));
     }
 
-    threaded_dot_prod<T, std::vector<T> > dot_prod_v(vec_size, n_threads, dot_prod_type);
-    threaded_dot_prod<T, T* > dot_prod_d(vec_size, n_threads, dot_prod_type);
+    threaded_reduction<T, std::vector<T> > dot_prod_v(vec_size, n_threads, dot_prod_type);
+    threaded_reduction<T, T* > dot_prod_d(vec_size, n_threads, dot_prod_type);
 
     //Launch nr_threads threads:
     auto start = std::chrono::steady_clock::now();
-    T res_v = dot_prod_v.execute(vec1_v, vec2_v);
+    T res_v = dot_prod_v.dot(vec1_v, vec2_v);
     auto finish = std::chrono::steady_clock::now();
     T elapsed_seconds = std::chrono::duration_cast<std::chrono::duration<T> >(finish - start).count();
     std::cout << "execution wall time for std::vector = " << elapsed_seconds << "sec." << std::endl;  
 
     start = std::chrono::steady_clock::now();
-    T res_d = dot_prod_d.execute(vec1_d, vec2_d);
+    T res_d = dot_prod_d.dot(vec1_d, vec2_d);
     finish = std::chrono::steady_clock::now();
     elapsed_seconds = std::chrono::duration_cast<std::chrono::duration<T> >(finish - start).count();
     std::cout << "execution wall time for T* = " << elapsed_seconds << "sec." << std::endl;  

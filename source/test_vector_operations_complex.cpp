@@ -95,11 +95,11 @@ int main(int argc, char const *argv[])
     // printf("sum = %lf \n", sum);
     // printf("mean= %lf \n", sum/T(vec_size));
 
-    gC_vecs.assign_scalar(TC( 1.0,-1.0), u1_d);
-    gC_vecs.assign_scalar(TC( 5.0, 2.0), u2_d);
-    gC_vecs.set_value_at_point(TC(-1.9999999276e5,1.9999999276e5), vec_size-10, u1_d);
-    gC_vecs.set_value_at_point(TC(3.987654321e4, 3.987654321e4), vec_size-7, u1_d);
-    
+    gC_vecs.assign_scalar(TC( 1.0e-4,-1.0e-5), u1_d);
+    gC_vecs.assign_scalar(TC( 5.0e-5, 2.0e-5), u2_d);
+    // gC_vecs.set_value_at_point(TC(-19999999276.0,-19999999276.0), vec_size-10, u1_d);
+    // gC_vecs.set_value_at_point(TC(-2987654321.0, 987654321.0), vec_size-7, u1_d);
+
 
     T norm_u1 = gC_vecs.norm(u1_d);
     T norm_u2 = gC_vecs.norm(u2_d);
@@ -107,9 +107,9 @@ int main(int argc, char const *argv[])
     T norm_u1_o = gC_vecs.norm(u1_d);
     T norm_u2_o = gC_vecs.norm(u2_d);
     gC_vecs.use_standard_precision();
-    printf("||u1|| = %.24le, ||u2|| = %.24le \n", double(norm_u1), double(norm_u2) );
-    printf("||u1||o= %.24le, ||u2||o= %.24le \n", double(norm_u1_o), double(norm_u2_o) );
-    printf("  err1 = %.24le,   err2 = %.24le \n", double(std::abs(norm_u1_o - norm_u1)), double(std::abs(norm_u2_o - norm_u2)) );
+    printf("||u1|| = %.16le, ||u2|| = %.16le \n", double(norm_u1), double(norm_u2) );
+    printf("||u1||o= %.16le, ||u2||o= %.16le \n", double(norm_u1_o), double(norm_u2_o) );
+    printf("  err1 = %.16le,   err2 = %.16le \n", double(std::abs(norm_u1_o - norm_u1)), double(std::abs(norm_u2_o - norm_u2)) );
 
 // save to host 
 
@@ -129,9 +129,9 @@ int main(int argc, char const *argv[])
         cudaEventElapsedTime(&milliseconds, start, stop);
 
         if(dot_prod_L.imag() < T(0.0) )
-            printf("dot_L = %.24le%.24lei time = %f ms\n", double(dot_prod_L.real()), double(dot_prod_L.imag()), milliseconds);
+            printf("dot_L = %.16le%.16lei time = %f ms\n", double(dot_prod_L.real()), double(dot_prod_L.imag()), milliseconds);
         else
-            printf("dot_L = %.24le+%.24lei time = %f ms\n", double(dot_prod_L.real()), double(dot_prod_L.imag()), milliseconds);
+            printf("dot_L = %.16le+%.16lei time = %f ms\n", double(dot_prod_L.real()), double(dot_prod_L.imag()), milliseconds);
         
         gC_vecs.use_high_precision();
         auto start_ch = std::chrono::steady_clock::now();
@@ -141,22 +141,22 @@ int main(int argc, char const *argv[])
         auto finish_ch = std::chrono::steady_clock::now();
         auto elapsed_mseconds = std::chrono::duration<double, std::milli>(finish_ch - start_ch).count();        
         if(dot_prod_ogita_G.imag() < T(0.0) )
-            printf("dot_OG= %.24le%.24lei time = %f ms\n", double(dot_prod_ogita_G.real()), double(dot_prod_ogita_G.imag()), elapsed_mseconds);
+            printf("dot_OG= %.16le%.16lei time = %f ms\n", double(dot_prod_ogita_G.real()), double(dot_prod_ogita_G.imag()), elapsed_mseconds);
         else
-            printf("dot_OG= %.24le+%.24lei time = %f ms\n", double(dot_prod_ogita_G.real()), double(dot_prod_ogita_G.imag()), elapsed_mseconds);
+            printf("dot_OG= %.16le+%.16lei time = %f ms\n", double(dot_prod_ogita_G.real()), double(dot_prod_ogita_G.imag()), elapsed_mseconds);
         gC_vecs.use_standard_precision();
-        printf("d_dot  = %.24le \n", std::abs<T>(dot_prod_L - dot_prod_ogita_G) );
+        printf("d_dot = %.24le \n", std::abs<T>(dot_prod_L - dot_prod_ogita_G) );
 
     }
     if(operation_type == 0 || operation_type == 1)
     {
-        printf("========================= sum =========================\n");
+        printf("========================= sumC =========================\n");
         //sum reduction
         auto start_ch = std::chrono::steady_clock::now();
         T asum_L = gC_vecs.absolute_sum(u2_d);
         auto finish_ch = std::chrono::steady_clock::now();
         auto elapsed_mseconds = std::chrono::duration<double, std::milli>(finish_ch - start_ch).count();
-        printf("asum_L = %.24le, time_wall = %lf ms\n", double(asum_L), elapsed_mseconds);
+        printf("asum_L = %.16le, time_wall = %lf ms\n", double(asum_L), elapsed_mseconds);
 
         T asum_ogita_G = 0.0;
 
@@ -164,9 +164,9 @@ int main(int argc, char const *argv[])
         asum_ogita_G = gC_vecs.absolute_sum(u2_d);
         finish_ch = std::chrono::steady_clock::now();
         elapsed_mseconds = std::chrono::duration<double, std::milli>(finish_ch - start_ch).count();
-        printf("asum_OgG= %.24le, time_wall = %lf ms\n", double(asum_ogita_G), elapsed_mseconds);
+        printf("asum_OgG=%.16le, time_wall = %lf ms\n", double(asum_ogita_G), elapsed_mseconds);
 
-        printf("d_asum  = %.24le \n", std::abs<T>(asum_ogita_G - asum_L) );
+        printf("d_asum = %.16le \n", std::abs<T>(asum_ogita_G - asum_L) );
 
  /*       if(use_ref)
         {
