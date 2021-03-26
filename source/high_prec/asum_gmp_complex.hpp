@@ -1,7 +1,7 @@
 // https://doc.lagout.org/science/0_Computer%20Science/3_Theory/Handbook%20of%20Floating%20Point%20Arithmetic.pdf
 
-#ifndef __DOT_PRODUCT_GMP_HPP__
-#define __DOT_PRODUCT_GMP_HPP__
+#ifndef __ASUM_GMP_COMPLEX_HPP__
+#define __ASUM_GMP_COMPLEX_HPP__
 
 #include <cstddef>
 #include <cstdint>
@@ -9,11 +9,14 @@
 #include <iomanip>
 #include <cmath>
 #include <../gmp/install/include/gmpxx.h>
-
+#include <thrust/complex.h>
 
 template<class T, class T_vec>
-class dot_product_gmp
+class asum_gmp
 {
+using TC = thrust::complex<T>;
+using TC_HP = thrust::complex<mpf_class>;
+
 private:
     T_vec X;
     T_vec Y;
@@ -22,46 +25,44 @@ private:
     size_t N;
 
     mpf_class s_m;
-    T dot_naive_v;
-    T dot_ogita_v;
-    T dot_fma_v;
+
 
 
 public:
-    dot_product_gmp(unsigned int exact_prec_bits_ = 512):
+    asum_gmp(unsigned int exact_prec_bits_ = 512):
     exact_prec_bits(exact_prec_bits_)
     {
         mpf_set_default_prec(exact_prec_bits);
     }
     
-    ~dot_product_gmp()
+    ~asum_gmp()
     {
     }
 
-    void set_arrays(size_t N_, T_vec& input_array_1_, T_vec& input_array_2_)
+    void set_array(size_t N_, T_vec& input_array_1_)
     {
 
         X = input_array_1_;
-        Y = input_array_2_;
 
         N = N_;
         array_set = true;
     }
     
-    T dot_exact()
+    T asum_exact()
     {
 
         s_m = mpf_class(0, exact_prec_bits);
+        mpf_class s_l = mpf_class(0, exact_prec_bits);
         for(size_t j=0;j<N;j++)
         {
-            mpf_class x_l(X[j], exact_prec_bits);
-            mpf_class y_l(Y[j], exact_prec_bits);
-            s_m = s_m + x_l*y_l;
+            TC_HP x_l(X[j]);
+            s_l = abs(x_l.real()) + abs(x_l.imag());
+            s_m = s_m + s_l;
         }
         
-        double dot_exact_T = s_m.get_d();
+        double sum_exact_T = s_m.get_d();
         
-        return T(dot_exact_T);
+        return T(sum_exact_T);
     }
     
     void print_res()

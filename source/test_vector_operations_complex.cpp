@@ -9,8 +9,8 @@
 #include <common/gpu_vector_operations.h>
 #include <common/cpu_vector_operations.h>
 #include <common/threaded_reduction.h>
-#include <high_prec/dot_product_gmp.hpp>
-#include <high_prec/sum_gmp.hpp>
+#include <high_prec/dot_product_gmp_complex.hpp>
+#include <high_prec/asum_gmp_complex.hpp>
 #include <common/gpu_reduction.h>
 #include <common/testing/gpu_reduction_ogita.h>
 #include <generate_vector_pair.hpp>
@@ -36,8 +36,10 @@ int main(int argc, char const *argv[])
     using gpu_reduction_ogita_real_t = gpu_reduction_ogita<T, T_vec>;
     using gpu_reduction_ogita_complex_t = gpu_reduction_ogita<TC, TC_vec>;
 
-    using dot_exact_t = dot_product_gmp<T, T_vec>;
-    using sum_exact_t = sum_gmp<T, T_vec>;
+    using dot_exact_t = dot_product_gmp_complex<T, TC_vec>;
+    using asum_exact_t = asum_gmp<T, TC_vec>;
+
+
 
 
     if(argc != 7)
@@ -71,22 +73,19 @@ int main(int argc, char const *argv[])
 
     
 
-    unsigned int exact_bits = 1024;
-    // dot_exact_t dp_ref(exact_bits);
-    // sum_exact_t s_ref(exact_bits);
+    unsigned int exact_bits = 2048;
+    dot_exact_t dp_ref(exact_bits);
+    asum_exact_t as_ref(exact_bits);
 
     TC *u1_d;
     TC *u2_d;
     TC *u1_c;
     TC *u2_c;
-    
 
 
     gC_vecs.init_vector(u1_d); gC_vecs.init_vector(u2_d);
     gC_vecs.start_use_vector(u1_d); gC_vecs.start_use_vector(u2_d);
     
-
-
     printf("using vectors of size = %i\n", vec_size);
 
     // min_max_t min_max = reduction.min_max(u3_d);
@@ -96,7 +95,7 @@ int main(int argc, char const *argv[])
     // printf("mean= %lf \n", sum/T(vec_size));
 
     gC_vecs.assign_scalar(TC( 1.0e-4,-1.0e-5), u1_d);
-    gC_vecs.assign_scalar(TC( 5.0e-5, 2.0e-5), u2_d);
+    gC_vecs.assign_scalar(TC( 5.0e-5, 2.0e-4), u2_d);
     // gC_vecs.set_value_at_point(TC(-19999999276.0,-19999999276.0), vec_size-10, u1_d);
     // gC_vecs.set_value_at_point(TC(-2987654321.0, 987654321.0), vec_size-7, u1_d);
 
@@ -135,7 +134,6 @@ int main(int argc, char const *argv[])
         
         gC_vecs.use_high_precision();
         auto start_ch = std::chrono::steady_clock::now();
-        // TC dot_prod_ogita_G = reduciton_ogita_complex.dot(u1_d, u2_d);
         TC dot_prod_ogita_G = gC_vecs.scalar_prod(u1_d, u2_d);
         cudaDeviceSynchronize();
         auto finish_ch = std::chrono::steady_clock::now();
@@ -146,12 +144,41 @@ int main(int argc, char const *argv[])
             printf("dot_OG= %.16le+%.16lei time = %f ms\n", double(dot_prod_ogita_G.real()), double(dot_prod_ogita_G.imag()), elapsed_mseconds);
         gC_vecs.use_standard_precision();
         printf("d_dot = %.24le \n", std::abs<T>(dot_prod_L - dot_prod_ogita_G) );
+ 
 
+       if(use_ref)
+        {
+            u1_c = (TC_vec)malloc(vec_size*sizeof(TC));
+            u2_c = (TC_vec)malloc(vec_size*sizeof(TC));
+
+            gC_vecs.get(u1_d, u1_c);
+            gC_vecs.get(u2_d, u2_c);
+
+            dp_ref.set_arrays(vec_size, u1_c, u2_c);
+
+            TC ref_exact = dp_ref.dot_exact();
+            
+            
+
+            printf("ref    =(%.24le,%.24le)\n", double(ref_exact.real()),double(ref_exact.imag()) ); 
+         
+            T rel_err_ogita = dp_ref.get_error_relative(dot_prod_ogita_G);
+            T rel_err_L = dp_ref.get_error_relative(dot_prod_L);
+            printf("mantisa: \033[0;31mX.123456789123456789\033[0m\n");
+            // printf("ref    = "); dp_ref.print_res();    
+            printf("error_L = %.24le \n", rel_err_L );
+            printf("error_ogita = %.24le \n", rel_err_ogita );
+
+            free(u1_c);
+            free(u2_c);
+
+        }
     }
     if(operation_type == 0 || operation_type == 1)
     {
         printf("========================= sumC =========================\n");
         //sum reduction
+        gC_vecs.use_standard_precision();
         auto start_ch = std::chrono::steady_clock::now();
         T asum_L = gC_vecs.absolute_sum(u2_d);
         auto finish_ch = std::chrono::steady_clock::now();
@@ -159,7 +186,7 @@ int main(int argc, char const *argv[])
         printf("asum_L = %.16le, time_wall = %lf ms\n", double(asum_L), elapsed_mseconds);
 
         T asum_ogita_G = 0.0;
-
+        gC_vecs.use_high_precision();
         start_ch = std::chrono::steady_clock::now();
         asum_ogita_G = gC_vecs.absolute_sum(u2_d);
         finish_ch = std::chrono::steady_clock::now();
@@ -167,45 +194,39 @@ int main(int argc, char const *argv[])
         printf("asum_OgG=%.16le, time_wall = %lf ms\n", double(asum_ogita_G), elapsed_mseconds);
 
         printf("d_asum = %.16le \n", std::abs<T>(asum_ogita_G - asum_L) );
-
- /*       if(use_ref)
+        if(use_ref)
         {
+            u1_c = (TC_vec)malloc(vec_size*sizeof(TC));
+            u2_c = (TC_vec)malloc(vec_size*sizeof(TC));
 
-            s_ref.set_array(vec_size, u2_c);
-            
-            start_ch = std::chrono::steady_clock::now();
-            threaded_reduce.use_high_prec();
-            T sum_ogita_C_th = threaded_reduce.sum(u2_c);
-            finish_ch = std::chrono::steady_clock::now();
-            elapsed_mseconds = std::chrono::duration<double, std::milli>(finish_ch - start_ch).count();
-            if(sum_C_th<T(0.0))
-                printf("sum_OgC=%.24le, time_wall = %lf ms\n", double(sum_C_th), elapsed_mseconds);
-            else
-                printf("sum_OgC= %.24le, time_wall = %lf ms\n", double(sum_C_th), elapsed_mseconds);
-            
-            T ref_exact = s_ref.sum_exact();
+            gC_vecs.get(u1_d, u1_c);
+            gC_vecs.get(u2_d, u2_c);
 
-            T error_sum_G = s_ref.get_error_relative(sum_G);
-            T error_sum_ogita_G = s_ref.get_error_relative(sum_ogita_G);
-            T error_sum_C_th = s_ref.get_error_relative(sum_C_th);
-            T error_sum_ogita_C_th = s_ref.get_error_relative(sum_ogita_C_th);
+            as_ref.set_array(vec_size, u2_c);
+
+            T ref_exact = as_ref.asum_exact();
             
             
 
-            if(ref_exact<T(0.0))
-                printf("ref    =%.24le\n", double(ref_exact)); 
-            else
-                printf("ref    = %.24le\n", double(ref_exact)); 
-
-
+            printf("ref    = %.24le\n", double(ref_exact) ); 
+         
+            T rel_err_ogita = as_ref.get_error_relative(asum_ogita_G);
+            T rel_err_L = as_ref.get_error_relative(asum_L);
             printf("mantisa: \033[0;31mX.123456789123456789\033[0m\n");
-            printf("ref    = "); s_ref.print_res();
-            printf("err_G  = %.24le, err_Ogita_G = %.24le, err_C_th = %.24le, err_Ogita_C_th = %.24le  \n", double(error_sum_G), double(error_sum_ogita_G), double(error_sum_C_th), double(error_sum_ogita_C_th) );
+            // printf("ref    = "); dp_ref.print_res();    
+            printf("error_L = %.24le \n", rel_err_L );
+            printf("error_ogita = %.24le \n", rel_err_ogita );
+
+            free(u1_c);
+            free(u2_c);
 
         }
-*/
+
+
     }
-    
+
+
+
     gC_vecs.free_vector(u1_d); gC_vecs.free_vector(u2_d);
 
     delete CUBLAS;

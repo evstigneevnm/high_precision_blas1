@@ -27,21 +27,6 @@ private:
     T dot_fma_v;
 
 
-    T two_prod(T &t, T a, T b) // [1], pdf: 71, 169, 198, 
-    {
-        T p = a*b;
-        t = std::fma(a, b, -p);
-        return p;
-    }
-
-    T two_sum(T &t, T a, T b) const
-    {
-        T s = a+b;
-        T z = s-a;
-        t = a-(s-z)+b-z;
-        return s;
-    }
-
 public:
     sum_gmp(unsigned int exact_prec_bits_ = 512):
     exact_prec_bits(exact_prec_bits_)

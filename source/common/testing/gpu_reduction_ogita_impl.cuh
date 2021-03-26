@@ -86,12 +86,11 @@ struct __GPU_REDUCTION_OGITA_H__SharedMemory< thrust::complex<double> >
     }
 };
 
+// FMA specilization
 template <class T>
 __device__ __forceinline__ T _fma(T a, T b, T c)
 {
 }
-
-
 template <>
 __device__ __forceinline__ float _fma(float a, float b, float c)
 {
@@ -104,7 +103,7 @@ __device__ __forceinline__ double _fma(double a, double b, double c)
     return __fma_rn(a, b, c);
 }
 
-//this needs specialization for complex, since no fma exist for thrust/complex
+//this needs specialization for complex, since no fma exist for thrust::complex
 template<class T>
 __device__ inline T __GPU_REDUCTION_OGITA_H__two_prod_device(T &t, T a, T b)
 {
@@ -128,7 +127,7 @@ template<>
 __device__ inline thrust::complex<float> __GPU_REDUCTION_OGITA_H__two_prod_device(thrust::complex<float> &t, thrust::complex<float> a, thrust::complex<float> b)
 {
     using T_real = float;
-    using TC = typename thrust::complex<float>;
+    using TC = typename thrust::complex<T_real>;
     // T p = a*b;
     // t = fma(a, b, -p);
     // return p;
@@ -139,18 +138,18 @@ __device__ inline thrust::complex<float> __GPU_REDUCTION_OGITA_H__two_prod_devic
     T_real b_I = b.imag();
 
     T_real p_R1 = a_R*b_R;
-    T_real t_R1 = _fma<float>(a_R, b_R, -p_R1);
+    T_real t_R1 = _fma<T_real>(a_R, b_R, -p_R1);
     T_real p_R2 = a_I*b_I;
-    T_real t_R2 = _fma<float>(a_I, b_I, -p_R2);
+    T_real t_R2 = _fma<T_real>(a_I, b_I, -p_R2);
     T_real p_I1 = a_R*b_I;
-    T_real t_I1 = _fma<float>(a_R, b_I, -p_I1);
+    T_real t_I1 = _fma<T_real>(a_R, b_I, -p_I1);
     T_real p_I2 = a_I*b_R;
-    T_real t_I2 = _fma<float>(a_I, b_R, -p_I2);
+    T_real t_I2 = _fma<T_real>(a_I, b_R, -p_I2);
 
     T_real t1 = T_real(0.0);
     T_real t2 = T_real(0.0);
-    T_real p_R = __GPU_REDUCTION_OGITA_H__two_sum_device<float>(t1, p_R1, p_R2);
-    T_real p_I = __GPU_REDUCTION_OGITA_H__two_sum_device<float>(t2, p_I1, -p_I2);
+    T_real p_R = __GPU_REDUCTION_OGITA_H__two_sum_device<T_real>(t1, p_R1, p_R2);
+    T_real p_I = __GPU_REDUCTION_OGITA_H__two_sum_device<T_real>(t2, p_I1, -p_I2);
     
     TC p = TC(p_R, p_I);
     
@@ -163,7 +162,7 @@ template<>
 __device__ inline thrust::complex<double> __GPU_REDUCTION_OGITA_H__two_prod_device(thrust::complex<double> &t, thrust::complex<double> a, thrust::complex<double> b)
 {
     using T_real = double;
-    using TC = typename thrust::complex<double>;
+    using TC = typename thrust::complex<T_real>;
     // T p = a*b;
     // t = fma(a, b, -p);
     // return p;
@@ -174,18 +173,18 @@ __device__ inline thrust::complex<double> __GPU_REDUCTION_OGITA_H__two_prod_devi
     T_real b_I = b.imag();
 
     T_real p_R1 = a_R*b_R;
-    T_real t_R1 = _fma(a_R, b_R, -p_R1);
+    T_real t_R1 = _fma<T_real>(a_R, b_R, -p_R1);
     T_real p_R2 = a_I*b_I;
-    T_real t_R2 = _fma(a_I, b_I, -p_R2);
+    T_real t_R2 = _fma<T_real>(a_I, b_I, -p_R2);
     T_real p_I1 = a_R*b_I;
-    T_real t_I1 = _fma(a_R, b_I, -p_I1);
+    T_real t_I1 = _fma<T_real>(a_R, b_I, -p_I1);
     T_real p_I2 = a_I*b_R;
-    T_real t_I2 = _fma(a_I, b_R, -p_I2);
+    T_real t_I2 = _fma<T_real>(a_I, b_R, -p_I2);
 
     T_real t1 = T_real(0.0);
     T_real t2 = T_real(0.0);
-    T_real p_R = __GPU_REDUCTION_OGITA_H__two_sum_device(t1, p_R1, p_R2);
-    T_real p_I = __GPU_REDUCTION_OGITA_H__two_sum_device(t2, p_I1, -p_I2);
+    T_real p_R = __GPU_REDUCTION_OGITA_H__two_sum_device<T_real>(t1, p_R1, p_R2);
+    T_real p_I = __GPU_REDUCTION_OGITA_H__two_sum_device<T_real>(t2, p_I1, -p_I2);
  
     TC p = TC(p_R, p_I);
     
@@ -194,20 +193,6 @@ __device__ inline thrust::complex<double> __GPU_REDUCTION_OGITA_H__two_prod_devi
     // printf("p_R1 = %le, p_R2 = %le\n", p_R1, p_R2 );
     return p;    
 }
-
-
-
-template<class T>
-__device__ inline T __GPU_REDUCTION_OGITA_H__two_sum_device(T &t, T a, typename gpu_reduction_ogita_type::type_complex_cast<T>::T b)
-{
-    T s = a+T(b);
-    T bs = s-a;
-    T as = s-bs;
-    t = (T(b)-bs) + (a-as);
-    return s;
-}
-
-
 
 template<class T>
 __device__ typename gpu_reduction_ogita_type::type_complex_cast<T>::T inline cuda_abs(T val)
@@ -225,6 +210,39 @@ __device__ float inline cuda_abs(float val)
     return( fabsf(val) );
 }
 
+
+template<class T>
+__device__ T __GPU_REDUCTION_OGITA_H__two_asum_device(T &t, T a, T b)
+{
+    T s = a+T(b);
+    T bs = s-a;
+    T as = s-bs;
+    t = (T(b)-bs) + (a-as);
+    return s;
+}
+
+template<>
+__device__ inline thrust::complex<float> __GPU_REDUCTION_OGITA_H__two_asum_device(thrust::complex<float> &t, thrust::complex<float> a, thrust::complex<float> b)
+{
+    float t1 = float(0.0);
+    thrust::complex<float> t2 = thrust::complex<float>(0.0);
+    float b_real = __GPU_REDUCTION_OGITA_H__two_sum_device<float>(t1, cuda_abs<float>(b.real()), cuda_abs<float>(b.imag()) );
+    thrust::complex<float> s = __GPU_REDUCTION_OGITA_H__two_sum_device< thrust::complex<float> >(t2, a, thrust::complex<float>(b_real, float(0.0)) );
+    t = thrust::complex<float>(t1, float(0.0) ) + t2;
+    return s;
+}
+template<>
+__device__ inline thrust::complex<double> __GPU_REDUCTION_OGITA_H__two_asum_device(thrust::complex<double> &t, thrust::complex<double> a, thrust::complex<double> b)
+{
+    double t1 = double(0.0);
+    thrust::complex<double> t2 = thrust::complex<double>(0.0);
+    double b_real = __GPU_REDUCTION_OGITA_H__two_sum_device<double>(t1, cuda_abs<double>(b.real()), cuda_abs<double>(b.imag()) );
+    thrust::complex<double> s = __GPU_REDUCTION_OGITA_H__two_sum_device< thrust::complex<double> >(t2, a, thrust::complex<double>(b_real, double(0.0)) );
+    t = thrust::complex<double>(t1, double(0.0) ) + t2;
+    return s;
+}
+
+// funciton for debug =)
 template<class T>
 __device__ inline void print_var(T var)
 {
@@ -240,13 +258,14 @@ __device__ inline void print_var(thrust::complex<float> var)
 {
     printf("var = (%le,%le)\n", (double)var.real(), (double)var.imag() );
 }
-
+// function ends
 
 
 template <class T, class T_vec, unsigned int blockSize, bool nIsPow2, bool first_run>
 __global__ void reduce_asum_ogita_kernel(const T_vec g_idata, T_vec g_odata, T_vec err_data, int n)
 {
 
+    using TR = typename gpu_reduction_ogita_type::type_complex_cast<T>::T;
     T *sdata = __GPU_REDUCTION_OGITA_H__SharedMemory<T>();
     T *cdata = &__GPU_REDUCTION_OGITA_H__SharedMemory<T>()[blockSize];
 
@@ -271,7 +290,9 @@ __global__ void reduce_asum_ogita_kernel(const T_vec g_idata, T_vec g_odata, T_v
             err_data[i] = T(0.0);
         }
         //main_sum += g_idata[i];
-        main_sum = __GPU_REDUCTION_OGITA_H__two_sum_device(error_local, main_sum, cuda_abs<T>(g_idata[i]) );
+        
+
+        main_sum = __GPU_REDUCTION_OGITA_H__two_asum_device(error_local, main_sum, g_idata[i] );
         error_sum += error_local + err_data[i];
 
         // ensure we don't read out of bounds -- this is optimized away for powerOf2 sized arrays
@@ -281,8 +302,7 @@ __global__ void reduce_asum_ogita_kernel(const T_vec g_idata, T_vec g_odata, T_v
             {
                 err_data[i + blockSize] = T(0.0);
             }
-
-            main_sum = __GPU_REDUCTION_OGITA_H__two_sum_device(error_local, main_sum, cuda_abs<T>(g_idata[i+blockSize]) );
+            main_sum = __GPU_REDUCTION_OGITA_H__two_asum_device(error_local, main_sum, g_idata[i+blockSize] );
             error_sum += error_local + err_data[i+blockSize];            
             //main_sum += g_idata[i+blockSize];
 
