@@ -128,10 +128,11 @@ int main(int argc, char const *argv[])
         cudaEventElapsedTime(&milliseconds, start, stop);
 
         if(dot_prod_L.imag() < T(0.0) )
-            printf("dot_L = %.16le%.16lei time = %f ms\n", double(dot_prod_L.real()), double(dot_prod_L.imag()), milliseconds);
+            printf("dot_L = %.16le%.16lei time = %f ms\n",  double(dot_prod_L.real()), double(dot_prod_L.imag()), milliseconds);
         else
             printf("dot_L = %.16le+%.16lei time = %f ms\n", double(dot_prod_L.real()), double(dot_prod_L.imag()), milliseconds);
         
+
         gC_vecs.use_high_precision();
         auto start_ch = std::chrono::steady_clock::now();
         TC dot_prod_ogita_G = gC_vecs.scalar_prod(u1_d, u2_d);
@@ -146,7 +147,7 @@ int main(int argc, char const *argv[])
         printf("d_dot = %.24le \n", std::abs<T>(dot_prod_L - dot_prod_ogita_G) );
  
 
-       if(use_ref)
+        if(use_ref)
         {
             u1_c = (TC_vec)malloc(vec_size*sizeof(TC));
             u2_c = (TC_vec)malloc(vec_size*sizeof(TC));

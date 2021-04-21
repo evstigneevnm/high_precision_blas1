@@ -61,7 +61,21 @@ public:
         
         return T(sum_exact_T);
     }
-    
+    T asum_exact()
+    {
+
+        s_m = mpf_class(0, exact_prec_bits);
+        for(size_t j=0;j<N;j++)
+        {
+            mpf_class x_l( std::abs(X[j]), exact_prec_bits);
+            s_m = s_m + x_l;
+        }
+        
+        double sum_exact_T = s_m.get_d();
+        
+        return T(sum_exact_T);
+    }
+
     void print_res()
     {
         std::cout << std::scientific << std::setprecision(128) << s_m << std::endl;

@@ -22,7 +22,7 @@ __device__ __forceinline__ T _shfl(T a, const int j)
     return __shfl_xor(a, j); //for 8.0<= cuda < 9.0
     #else
     return __shfl_xor_sync(0xFFFFFFFF, a, j); //for cuda >=9 
-    // -1 = 0xFFFFFFFF assums that threadsize = 32, see cuda/include/cooperative_groups.h
+    // -1 = 0xFFFFFFFF assumes that threadsize = 32, see cuda/include/cooperative_groups.h
     #endif
      
     
