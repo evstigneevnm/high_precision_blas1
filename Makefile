@@ -3,14 +3,16 @@ FTYPE = -DTYPE=float
 NVCC = /usr/local/cuda/bin/nvcc
 GCC = /usr/bin/gcc
 GPP = /usr/bin/g++
-GCC_kern = /usr/bin/gcc-5
+GCC_kern = /usr/bin/g++-5
+SM_CUDA = sm_35
+CPP_STANDARD = c++11
 
-NVCCFLAGS = -Wno-deprecated-gpu-targets -g -arch=sm_35 -std=c++11 -ccbin=g++-5
-NVCCFLAGS_R = -Wno-deprecated-gpu-targets -O3 -arch=sm_35 -std=c++11 -ccbin=g++-5
+NVCCFLAGS = -Wno-deprecated-gpu-targets -g -arch=$(SM_CUDA) -std=$(CPP_STANDARD) -ccbin=$(GCC_kern)
+NVCCFLAGS_R = -Wno-deprecated-gpu-targets -O3 -arch=$(SM_CUDA) -std=$(CPP_STANDARD) -ccbin=$(GCC_kern)
 LIBFLAGS = --compiler-options -fPIC
-GCCFLAGS = -g -std=c++11 -pthread
-GCCFLAGS_R = -O3 -std=c++11 -pthread
-GCCFLAGS_RN = -O3 -std=c++11 -Xcompiler -pthread
+GCCFLAGS = -g -std=$(CPP_STANDARD) -pthread
+GCCFLAGS_R = -O3 -std=$(CPP_STANDARD) -pthread
+GCCFLAGS_RN = -O3 -std=$(CPP_STANDARD) -Xcompiler -pthread
 ICUDA = -I/usr/local/cuda/include
 IPROJECT = -I source/
 IBOOST = -I/home/noctum/boost_1_70/include/
@@ -24,6 +26,9 @@ LIBBOOST = -lboost_serialization
 LLAPACK = -L/opt/OpenBLAS/lib -lopenblas
 LGMP = -L gmp/install/lib -lgmp -lgmpxx
 
+
+test_batch2:
+	$(GPP) $(GCCFLAGS) $(DTYPE) $(IPROJECT) $(IGMP) source/test_batch_bounds.cpp $(LGMP) -o test_batch_bounds.bin
 
 deb_d:
 	$(GPP) $(GCCFLAGS) $(DTYPE) $(IPROJECT) source/test_linear_solver.cpp -o test_linear_solver.bin
