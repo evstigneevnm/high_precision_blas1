@@ -68,7 +68,7 @@ int main(int argc, char const *argv[])
     unsigned int exact_bits = 1024;
     sum_exact_t s_ref(exact_bits);
     random_adapter_t rand;
-    rand.set_uniform_distribution(-100.0, 100.0);
+    rand.set_uniform_distribution(-150.0, 150.0);
 
     T_vec vec;
     vec.reserve(N);
