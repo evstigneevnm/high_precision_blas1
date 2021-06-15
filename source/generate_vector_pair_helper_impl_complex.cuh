@@ -107,6 +107,22 @@ __global__ void return_abs_vec_inplace_kernel(size_t N, T_vec x_)
 }
 
 template<class T, class T_vec>
+__global__ void return_abs_4vec_inplace_kernel(size_t N, T_vec x1_, T_vec x2_, T_vec x3_, T_vec x4_)
+{
+    unsigned int j = blockIdx.x*blockDim.x + threadIdx.x;
+    if(j>=N)
+    {
+        return;
+    }
+    x1_[j] = abs_cuda<T>(x1_[j]);
+    x2_[j] = abs_cuda<T>(x2_[j]);
+    x3_[j] = abs_cuda<T>(x3_[j]);
+    x4_[j] = abs_cuda<T>(x4_[j]);
+
+}
+
+
+template<class T, class T_vec>
 __global__ void convert_vector_T_to_double_kernel(size_t N, T_vec x_T_, double* x_D_)
 {
     unsigned int j = blockIdx.x*blockDim.x + threadIdx.x;
@@ -134,6 +150,12 @@ template<class T, class T_vec, int BLOCK_SIZE>
 void generate_vector_pair_helper_complex<T, T_vec, BLOCK_SIZE>::return_abs_double_vec_inplace(double* x_)
 {
     return_abs_vec_inplace_kernel<double, double*><<<dimGrid, dimBlock>>>(sz, x_);
+}
+
+template<class T, class T_vec, int BLOCK_SIZE>
+void generate_vector_pair_helper_complex<T, T_vec, BLOCK_SIZE>::return_abs_4double_vec_inplace(double* x1_, double* x2_, double* x3_, double* x4_)
+{
+    return_abs_4vec_inplace_kernel<double, double*><<<dimGrid, dimBlock>>>(sz, x1_, x2_, x3_, x4_);
 }
 
 template<class T, class T_vec, int BLOCK_SIZE>

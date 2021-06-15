@@ -1,5 +1,6 @@
 //some test for all implemented vector operations;
 #include <cmath>
+#include <algorithm>
 #include <limits>
 #include <iostream>
 #include <cstdio>
@@ -10,6 +11,7 @@
 #include <common/gpu_vector_operations.h>
 #include <common/cpu_vector_operations.h>
 #include <common/threaded_reduction.h>
+#include <high_prec/dot_product_gmp.hpp>
 #include <high_prec/dot_product_gmp_complex.hpp>
 #include <generate_vector_pair_complex.hpp>
 #include <chrono>
@@ -62,7 +64,8 @@ int main(int argc, char const *argv[])
     using T_vec = gpu_vector_operations_t::vector_type;
     using TC_vec = gpu_vector_operationsC_t::vector_type;
 
-    using dot_exact_t = dot_product_gmp_complex<T, T_vec>;
+    using dot_exact_t = dot_product_gmp<T, T_vec>;
+    using dot_exact_complex_t = dot_product_gmp_complex<T, TC_vec>;
     using generate_vector_pair_t = generate_vector_pair_complex<gpu_vector_operationsC_t,gpu_vector_operations_t, dot_exact_t>;
     using threaded_reduction_t = threaded_reduction<TC, TC_vec>;
     using error_bounds_t = error_bounds<T>;    
@@ -83,10 +86,13 @@ int main(int argc, char const *argv[])
     T cond_number_max = atof(argv[3]);
     T cond_step_ = atof(argv[4]);
     int executions_step = atof(argv[5]);
-    std::string type_name = return_type_name<TC>( TC(1.0) );
+    std::string type_name = return_type_name<TC>( TC(1.0,1.0) );
     init_cuda(gpu_pci_id);
     int dot_prod_type_initial = 0;
-    dot_exact_t dp_ref(1024);
+    
+    int gmp_bits = 1024;
+    dot_exact_complex_t dp_ref_complex(gmp_bits);
+    dot_exact_t dp_ref(gmp_bits);
 
     cublas_wrap *CUBLAS_ref = new cublas_wrap(true);
     gpu_vector_operationsC_t g_vecCs(vec_size, CUBLAS_ref);
@@ -151,41 +157,44 @@ int main(int argc, char const *argv[])
             std::cout << std::scientific << "*dotCtH= " << dot_prod_th_H << std::endl;
             std::cout << std::scientific << "*dot_OG= " << dot_prod_reduct_ogita << std::endl;
            
-/*            
-            dp_ref.set_arrays(vec_size, u1_c, u2_c);
-            T ref_exact = dp_ref.dot_exact();            
-
-            err_bnd.generate_real_dot(vec_size, cond_estimste, 24);
-
-            T error_exact_L = dp_ref.get_error_relative(dot_prod_BLAS);
-            T error_exact_G = dp_ref.get_error_relative(dot_prod_reduct);
-            T error_exact_ogita_G = dp_ref.get_error_relative(dot_prod_reduct_ogita);
-            T error_exact_C = dp_ref.get_error_relative(dot_prod);
-            T error_exact_C_H = dp_ref.get_error_relative(dot_prod_H);    
-            T error_exact_C_th = dp_ref.get_error_relative(dot_prod_th);
-            T error_exact_C_th_H = dp_ref.get_error_relative(dot_prod_th_H);  
-
-
-            long double simple_bound_ = normalize_error<long double>(err_bnd.dot.real.base.sequential);
-            long double pairwise_bound_ = normalize_error<long double>(err_bnd.dot.real.base.pairwise_parallel );
-            long double parallel24_bound_ = normalize_error<long double>(err_bnd.dot.real.base.pairwise_parallel);
             
-            long double ogita_bound_ = normalize_error<long double>(err_bnd.dot.real.compensated.sequential );
-            long double pairwise_comp_bound_ = normalize_error<long double>(err_bnd.dot.real.compensated.pairwise_parallel );
-            long double parallel_comp_24_bound_ = normalize_error<long double>(err_bnd.dot.real.compensated.pairwise_parallel);
+            dp_ref_complex.set_arrays(vec_size, u1_c, u2_c);
+            TC ref_exact = dp_ref_complex.dot_exact();            
+            std::cout << "ref   = " << ref_exact << std::endl;
+            T cond_estimste_max = std::max(cond_estimste.first, cond_estimste.second);
+            std::cout << "max cond_number = " << cond_estimste_max << std::endl;
+            err_bnd.generate_complex_dot(vec_size, std::max(cond_estimste.first, cond_estimste.second), 24);
 
-            // std::cout << "simple:" << simple_bound_ << " pairwise:" << pairwise_bound_ << " parallel24:" << parallel24_bound_ << " ogita:" << ogita_bound_ << " c_pairwise:" << pairwise_comp_bound_ << " c_parallel24:" << parallel_comp_24_bound_ << std::endl;
+            TC error_exact_L = dp_ref_complex.get_error_relative(dot_prod_BLAS);
+            TC error_exact_ogita_G = dp_ref_complex.get_error_relative(dot_prod_reduct_ogita);
+            TC error_exact_C = dp_ref_complex.get_error_relative(dot_prod);
+            TC error_exact_C_H = dp_ref_complex.get_error_relative(dot_prod_H);    
+            TC error_exact_C_th = dp_ref_complex.get_error_relative(dot_prod_th);
+            TC error_exact_C_th_H = dp_ref_complex.get_error_relative(dot_prod_th_H);  
+
+
+            long double simple_bound_ = normalize_error<long double>(err_bnd.dot.complex.base.sequential);
+            long double pairwise_bound_ = normalize_error<long double>(err_bnd.dot.complex.base.pairwise_parallel );
+            long double parallel24_bound_ = normalize_error<long double>(err_bnd.dot.complex.base.pairwise_parallel);
             
+            long double ogita_bound_ = normalize_error<long double>(err_bnd.dot.complex.compensated.sequential );
+            long double pairwise_comp_bound_ = normalize_error<long double>(err_bnd.dot.complex.compensated.pairwise_parallel );
+            long double parallel_comp_24_bound_ = normalize_error<long double>(err_bnd.dot.complex.compensated.pairwise_parallel);
 
-            printf("ref   = %.24le \n", double(ref_exact));        
-            printf("mantisa:\033[0;31mX.123456789123456789\033[0m \n");
-            printf("err_L = %.24le | %.24le \nerr_G = %.24le | %.24le \nerr_Ct = %.24le \nerr_C = %.24le | %.24le \n*err_CH= %.24le | %.24le \n*errCtH= %.24le | %.24le \n*err_GH= %.24le | %.24le\n", double(error_exact_L), double(pairwise_bound_), double(error_exact_G), double(pairwise_bound_), double(error_exact_C_th), double(error_exact_C), double(simple_bound_), double(error_exact_C_H), double(ogita_bound_), double(error_exact_C_th_H), double(parallel_comp_24_bound_), double(error_exact_ogita_G),  double(pairwise_comp_bound_));
+      
+        
+            std::cout << "mantisa:\033[0;31mX.123456789123456789\033[0m " << std::endl;
+            std::cout << "err_L  = " <<  error_exact_L << " | " << pairwise_bound_ << std::endl;
+            std::cout << "err_Ct = " <<  error_exact_C_th << " | " << parallel24_bound_ << std::endl;
+            std::cout << "err_C  = " <<  error_exact_C << " | " << simple_bound_ << std::endl;
+            std::cout << "*err_CH = " <<  error_exact_C_H << " | " << ogita_bound_ << std::endl;
+            std::cout << "*errCtH = " <<  error_exact_C_th_H << " | " << parallel_comp_24_bound_ << std::endl;  
+            std::cout << "*err_GH = " <<  error_exact_ogita_G << " | " << pairwise_comp_bound_ << std::endl;          
 
-            if ( !(f << cond_estimste  << " " << normalize_error(error_exact_L) << " " << normalize_error(error_exact_G) << " " << normalize_error(error_exact_ogita_G) << " " << normalize_error(error_exact_C) << " " <<  normalize_error(error_exact_C_H) << " " << normalize_error(error_exact_C_th) << " " << normalize_error(error_exact_C_th_H) << " " << ogita_bound_ << " " << parallel24_bound_ << " " << parallel_comp_24_bound_ << " " << pairwise_bound_ << " " << pairwise_comp_bound_ << " "<< simple_bound_ << std::endl ) )
-            {
-                throw std::runtime_error("error while writing to file: " + f_name);
-            }
-*/
+            // if ( !(f << cond_estimste_max  << " " << normalize_error(error_exact_L) << " " << normalize_error(error_exact_G) << " " << normalize_error(error_exact_ogita_G) << " " << normalize_error(error_exact_C) << " " <<  normalize_error(error_exact_C_H) << " " << normalize_error(error_exact_C_th) << " " << normalize_error(error_exact_C_th_H) << " " << ogita_bound_ << " " << parallel24_bound_ << " " << parallel_comp_24_bound_ << " " << pairwise_bound_ << " " << pairwise_comp_bound_ << " "<< simple_bound_ << std::endl ) )
+            // {
+            //     throw std::runtime_error("error while writing to file: " + f_name);
+            // }
         }
 
         cond_number *= cond_step_;

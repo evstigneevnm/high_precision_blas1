@@ -116,23 +116,30 @@ int main(int argc, char const *argv[])
         {
             T cond_estimste = generator.generate(u1_d, u2_d, cond_number);
             printf("condition estimate = %le\n", cond_estimste);
+            g_vecs.use_standard_precision();
             T dot_prod_BLAS = g_vecs.scalar_prod(u1_d, u2_d);
             T dot_prod_reduct = reduction.dot(u1_d, u2_d);
-            T dot_prod_reduct_ogita = reduction_ogita.dot(u1_d, u2_d);
+            //T dot_prod_reduct_ogita = reduction_ogita.dot(u1_d, u2_d);
+            g_vecs.use_high_precision();
+            T dot_prod_reduct_ogita = g_vecs.scalar_prod(u1_d, u2_d);
+            g_vecs.use_standard_precision();
             printf("dot_L  = %.24le \n", double(dot_prod_BLAS) );  
             printf("dot_G  = %.24le \n", double(dot_prod_reduct) );        
             
             g_vecs.get(u1_d, u1_c);
             g_vecs.get(u2_d, u2_c);
             
-            threaded_reduce.use_normal_prec();            
+            threaded_reduce.use_standard_precision();            
             T dot_prod_th = threaded_reduce.dot(u1_c, u2_c);
-            threaded_reduce.use_high_prec();
+            threaded_reduce.use_high_precision();
             T dot_prod_th_H = threaded_reduce.dot(u1_c, u2_c);
-            threaded_reduce.use_normal_prec();
+            threaded_reduce.use_standard_precision();
 
-            T dot_prod = c_vecs.scalar_prod(u1_c, u2_c, 0);
-            T dot_prod_H = c_vecs.scalar_prod(u1_c, u2_c, 1);            
+            c_vecs.use_standard_precision();
+            T dot_prod = c_vecs.scalar_prod(u1_c, u2_c);
+            c_vecs.use_high_precision();
+            T dot_prod_H = c_vecs.scalar_prod(u1_c, u2_c);            
+            c_vecs.use_standard_precision();
 
             printf("dot_C  = %.24le \n", double(dot_prod) );
             printf("dot_Ct = %.24le \n", double(dot_prod_th) );

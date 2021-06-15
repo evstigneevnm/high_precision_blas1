@@ -9,7 +9,7 @@
 #include <iomanip>
 #include <cmath>
 #include <complex>
-#include </opt/gmp/include/gmpxx.h>
+#include <gmpxx.h>
 #include <thrust/complex.h>
 
 
@@ -26,7 +26,7 @@ class dot_product_gmp_complex
 using TC = thrust::complex<T>;
 // using TC_HP = thrust::complex<mpf_class>; // dosn't work due to forced allign! bug in thrust!
 using TC_STL = std::complex<mpf_class>;
-
+using TR = mpf_class;
 private:
     T_vec X;
     T_vec Y;
@@ -64,9 +64,11 @@ public:
     TC dot_exact()
     {
 
+        dot_m_std = mpf_class(0, exact_prec_bits);
         for(size_t j=0;j<N;j++)
         {
-            TC_STL x_l( std::complex<T>(conj(X[j]) ) );
+            
+            TC_STL x_l( std::complex<T>(conj(X[j])) );
             TC_STL y_l( std::complex<T>(Y[j]) );
             dot_m_std = dot_m_std + x_l*y_l;
         }
@@ -98,13 +100,15 @@ public:
 
         return std::abs(err_c);
     }
-    T get_error_relative(const TC& approx_res_)
+    TC get_error_relative(const TC& approx_res_)
     {
         TC_STL dot_v_m(std::complex<T>(approx_res_.real(), approx_res_.imag()));
-        TC_STL errC_m = (dot_v_m + (-dot_m_std))/abs(dot_m_std);
-        mpf_class err_m = std::abs(errC_m);
-        double err_d = err_m.get_d();
-        return T(err_d);
+        TC_STL errC_m = dot_v_m - dot_m_std;
+        TR err_re = errC_m.real()/dot_m_std.real();
+        TR err_im = errC_m.imag()/dot_m_std.imag();
+        errC_m = TC_STL(abs(err_re), abs(err_im));
+        TC errThrust = TC( errC_m.real().get_d(), errC_m.imag().get_d() );
+        return errThrust;
     }    
     T get_error_relative_T(const TC& approx_res_)
     {

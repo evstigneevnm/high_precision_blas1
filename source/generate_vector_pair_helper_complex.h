@@ -34,6 +34,7 @@ public:
 
     void return_abs_vec(const TR_vec x_in, TR_vec x_out);
     void return_abs_vec_inplace(TR_vec x_);
+    void return_abs_4double_vec_inplace(double* x1_, double* x2_, double* x3_, double* x4_);
     void return_abs_double_vec_inplace(double* x_);
     void convert_vector_T_to_double(TR_vec x_T_, double* x_D_);
 

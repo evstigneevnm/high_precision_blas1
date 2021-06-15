@@ -5,6 +5,7 @@
 #include <utility>
 #include <cmath>
 #include <algorithm>
+#include <vector>
 #include <random>
 #include <utils/cuda_support.h>
 #include <generate_vector_pair_helper_complex.h>
@@ -47,7 +48,7 @@ public:
     vec_opsR(vec_opsR_),
     exact_dot(exact_dot_)
     {
-
+        use_exact_dot = 0;
         sz = vec_ops->get_vector_size();
         d1_c = new T[sz];
         d2_c = new T[sz];
@@ -90,20 +91,19 @@ public:
         vec_ops->stop_use_vector(x2_a_); vec_ops->free_vector(x2_a_);   
     }
 
-    void use_exact_dot_cond()
+    void dot_exact()
     {
         use_exact_dot = 1;
-    }
-
-    void use_exact_dot_cond_cuda()
-    {
-        use_exact_dot = 2;
     }
 
     std::pair<TR,TR> generate(T_vec& x_, T_vec& y_, TR condition_number_, int use_exact_dot_cuda_ = 0)
     {
         std::pair<TR,TR> condition_estimate = {0,0};
-        {
+        
+        std::uniform_int_distribution<> test_re_im(0, 1 );
+        int gen_re_or_im = test_re_im(gen);
+
+        do{
             TR b = std::log2(condition_number_);
             // we take the last X elements or a half at most
             // it is needed to adjust the vectors to the appropriate condition number
@@ -129,32 +129,78 @@ public:
             host_2_device_cpy<TR>(&rand_exponent_d[sz - N_fix_part], exp_fixed, N_fix_part);
             vec_ops->assign_random(rand_mantisa_d, T(-1.0,-1.0), T(1.0,1.0) );
 
-            // vec_helper->generate_C_estimated_vector(b_val, rand_mantisa_d, rand_exponent_d, x_, N_fix_part);
+            vec_helper->generate_C_estimated_vector(b_val, rand_mantisa_d, rand_exponent_d, x_, N_fix_part);
 
             vec_opsR->assign_random(rand_exponent_d, TR(0.0), TR(b_val) );
             vec_ops->assign_random(rand_mantisa_d, T(-1.0,-1.0), T(1.0,1.0) );
-            //vec_helper->generate_C_estimated_vector(b_val, rand_mantisa_d, rand_exponent_d, y_, N_fix_part);
+            vec_helper->generate_C_estimated_vector(b_val, rand_mantisa_d, rand_exponent_d, y_, N_fix_part);
 
             device_2_host_cpy<T>(x_part_c, &x_[sz - N_fix_part], N_fix_part);
             T_vec y_part_c = new T[N_fix_part];
             device_2_host_cpy<T>(y_part_c, &rand_mantisa_d[sz - N_fix_part], N_fix_part);
 
             for( int j = 0; j<N_fix_part; j++)
-            {
-                
+            {             
+/*
+                        xl = ((2*rand-1)+1i.*(2*rand-1))*2^e(i-n2); % x_i random with generated exponent
+                        x(i) = xl;
+                        
+                        dot_r1 = DotExact(real(x),real(y));
+                        dot_r2 = DotExact(imag(x),imag(y));
+                        
+                        dot_i1 = DotExact(real(x),imag(y));
+                        dot_i2 = DotExact(imag(x),real(y));
+                        
+                        flag = rand;
+                        if(flag>0.5)
+                            y_real = (real(xl) - dot_r1)/real(xl);
+                            y_imag = (imag(xl) - dot_r2)/imag(xl);
+                        else
+                            y_imag = (real(xl) - dot_i1)/real(xl);
+                            y_real = (imag(xl) - dot_i2)/imag(xl);
+                        end
+
+                        y(i) = y_real+1i*y_imag;  % y_i according to (*)
+*/
                 // T dot_xy = dot(x_, y_); //local dot product!!!
                 // T y_l = (y_part_c[j]*std::pow<T>(T(2.0), exp_fixed[j]) - dot_xy)/x_part_c[j];
                 // vec_ops->set_value_at_point(y_l, sz - N_fix_part + j, y_);
+                vec_helper->split_complex_vector_to_reals(x_, x1_double_r_, x1_double_i_);
+                vec_helper->split_complex_vector_to_reals(y_, x2_double_r_, x2_double_i_);
+                TR y_l_real = 0;
+                TR y_l_imag = 0;
+                if(gen_re_or_im==0)
+                {
+
+                    TR RR = dot_real(x1_double_r_, x2_double_r_);
+                    TR II = dot_real(x1_double_i_, x2_double_i_);
+                    y_l_real = ( y_part_c[j].real()*std::pow<TR>(TR(2.0), exp_fixed[j]) - RR)/x_part_c[j].real();
+                    y_l_imag = (y_part_c[j].imag()*std::pow<TR>(TR(2.0), exp_fixed[j]) - II)/x_part_c[j].imag();
+                
+                }
+                else
+                {
+                    TR RI = dot_real(x1_double_r_, x2_double_i_);
+                    TR IR = dot_real(x1_double_i_, x2_double_r_);
+                    y_l_imag = ( y_part_c[j].real()*std::pow<TR>(TR(2.0), exp_fixed[j]) - RI)/x_part_c[j].real();
+                    y_l_real = (y_part_c[j].imag()*std::pow<TR>(TR(2.0), exp_fixed[j]) - IR)/x_part_c[j].imag();                    
+                }
+                vec_ops->set_value_at_point(T(y_l_real, y_l_imag), sz - N_fix_part + j, y_);
+
+
             }
+
             // host_2_device_cpy<T>(&y_[sz - N_fix_part], y_part_c, N_fix_part);
 
             delete [] exp_fixed;
             delete [] y_part_c;
             delete [] x_part_c;
 
-            std::pair<TR,TR> condition_estimate = {0,0};//estimate_condition_reduction(x_, y_);
+            condition_estimate = estimate_condition_reduction(x_, y_);
+
+
         }
-        while(!(isfinite(condition_estimate.first)&&isfinite(condition_estimate.second)) );
+        while(!(isfinite(condition_estimate.first)||isfinite(condition_estimate.second)) );
 
         return condition_estimate;
     }
@@ -178,58 +224,62 @@ private:
     vec_helper_t* vec_helper = nullptr;
 
 
-    T estimate_condition_reduction(T_vec x1_, T_vec x2_)
+    std::pair<TR,TR> estimate_condition_reduction(T_vec x1_, T_vec x2_)
     {
         
         
-        vec_helper->convert_vector_T_to_double(x1_, x1_double_a_);
-        vec_helper->convert_vector_T_to_double(x2_, x2_double_a_);
-        // double x1x2 = std::abs( reduction_double->dot(x1_double_a_, x2_double_a_) );
-        vec_helper->return_abs_double_vec_inplace(x1_double_a_);
-        vec_helper->return_abs_double_vec_inplace(x2_double_a_);
-        // double ax1aax2a = reduction_double->dot(x1_double_a_, x2_double_a_);
-        // return( T(ax1aax2a/x1x2) );
-        return 0;
-    }
+        vec_helper->split_complex_vector_to_reals(x1_, x1_double_r_, x1_double_i_);
+        vec_helper->split_complex_vector_to_reals(x2_, x2_double_r_, x2_double_i_);
+        T res_dot = dot(x1_double_r_, x2_double_r_, x1_double_i_, x2_double_i_);
+        T res_abs_dot = T(std::abs(res_dot.real()), std::abs(res_dot.imag()));
 
-    T estimate_condition_blas(T_vec x1_, T_vec x2_)
-    {
+        vec_helper->return_abs_4double_vec_inplace(x1_double_r_, x2_double_r_, x1_double_i_, x2_double_i_);
+        TR adot1 = dot_real(x1_double_r_, x2_double_r_);
+        TR adot2 = dot_real(x1_double_i_, x2_double_i_);
+        TR adot3 = dot_real(x1_double_r_, x2_double_i_);
+        TR adot4 = dot_real(x1_double_i_, x2_double_r_);
+
+        TR cond_re = (adot1+adot2)/res_abs_dot.real();
+        TR cond_im = (adot3+adot4)/res_abs_dot.imag();
         
-        T x1x2 = std::abs( vec_ops->scalar_prod(x1_, x2_) );
-        vec_helper->return_abs_vec(x1_, x1_a_);
-        vec_helper->return_abs_vec(x2_, x2_a_);
-        T ax1aax2a = vec_ops->scalar_prod(x1_a_, x2_a_);
-        return(ax1aax2a/x1x2);
+        return( std::pair<TR,TR>(cond_re, cond_im) );
     }
 
-    inline T dot(T_vec d1, T_vec d2)
+    T dot(TR_vec x1_r, TR_vec x2_r, TR_vec x1_i, TR_vec x2_i)
     {
-        return( dot_reduction(d1, d2) );
-    }
-    inline T dot_reduction(T_vec d1, T_vec d2)
-    {
-        return( vec_ops->scalar_prod(d1, d2) );
+        TR RR = dot_real(x1_r, x2_r);
+        TR II = dot_real(x1_i, x2_i);
+        
+        TR RI = dot_real(x1_r, x2_i);
+        TR IR = dot_real(x1_i, x2_r);
+
+        return( T(RR+II, RI-IR) );
     }
 
 
-    T dot_exact(T_vec d1, T_vec d2)
+
+    TR dot_real(TR_vec d1, TR_vec d2)
     {
+        TR res;
         if(use_exact_dot == 1)
         {
             exact_dot->set_arrays(sz, d1, d2);
-            return( exact_dot->dot_exact() );
-        }
-        else if(use_exact_dot == 2)
-        {
-            vec_ops->get(d1, d1_c);
-            vec_ops->get(d2, d2_c);
-            exact_dot->set_arrays(sz, d1_c, d2_c);
-            return( exact_dot->dot_exact() );            
+            res = exact_dot->dot_exact();
         }
         else
         {
-            return T(0.0);
+            vec_opsR->use_high_precision();
+            res = vec_opsR->scalar_prod(d1, d2);
+            vec_opsR->use_standard_precision();
         }
+        return(res);
+    }
+
+
+    std::vector<TR> dot_parts(T_vec d1, T_vec d2)
+    {
+
+
     }
 
 

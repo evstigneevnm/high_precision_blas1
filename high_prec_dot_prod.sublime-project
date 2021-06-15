@@ -15,6 +15,7 @@
         "ecc_common_flags" : [
             "-I/usr/local/cuda/include",
             "-I/usr/local/inlcude",
+	    "-I/opt/gmp/include",
             "-I$project_base_path/source",
 			"-DTYPE=double",
 	    "-I$project_base_path"
