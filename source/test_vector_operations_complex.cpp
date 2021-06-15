@@ -94,11 +94,20 @@ int main(int argc, char const *argv[])
     // printf("sum = %lf \n", sum);
     // printf("mean= %lf \n", sum/T(vec_size));
 
-    gC_vecs.assign_scalar(TC( 1.0e-4,-1.0e-5), u1_d);
-    gC_vecs.assign_scalar(TC( 5.0e-5, 2.0e-4), u2_d);
+    // gC_vecs.assign_scalar(TC( 1.0e-4,-1.0e-5), u1_d);
+    // gC_vecs.assign_scalar(TC( 5.0e-5, 2.0e-4), u2_d);
     // gC_vecs.set_value_at_point(TC(-19999999276.0,-19999999276.0), vec_size-10, u1_d);
     // gC_vecs.set_value_at_point(TC(-2987654321.0, 987654321.0), vec_size-7, u1_d);
-
+    gC_vecs.assign_random(u1_d, TC(-1,-1), TC(1,1) );
+    gC_vecs.assign_random(u2_d, TC(-1,-1), TC(1,1) );//, TC(-10.0, -10.0), TC(10.0, 10.0) );
+    
+    if(vec_size<20)
+    {
+        for (int j = 0; j < vec_size; ++j)
+        {
+            std::cout << gC_vecs.get_value_at_point(j, u1_d) << std::endl;
+        }
+    }
 
     T norm_u1 = gC_vecs.norm(u1_d);
     T norm_u2 = gC_vecs.norm(u2_d);
@@ -114,6 +123,7 @@ int main(int argc, char const *argv[])
 
     if(operation_type == 0 || operation_type == 2)
     {
+        gC_vecs.use_standard_precision();
         printf("========================= dotC =========================\n");    
         cudaEvent_t start, stop;
         cudaEventCreate(&start);

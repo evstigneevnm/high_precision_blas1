@@ -5,6 +5,7 @@
 #include <common/dot_product.h>
 #include <common/threaded_reduction.h>
 
+
 template <typename T>
 struct cpu_vector_operations
 {
@@ -80,7 +81,19 @@ struct cpu_vector_operations
         
         return true;
     }
-    scalar_type scalar_prod(const vector_type &x, const vector_type &y, int use_high_prec_ = -1)const
+    
+    void use_high_precision()
+    {
+        dot->use_high_prec();
+        threaded_dot->use_high_precision();
+    }
+    void use_standard_precision()
+    {
+        dot->use_normal_prec();
+        threaded_dot->use_standard_precision();
+    }    
+
+    scalar_type scalar_prod(const vector_type &x, const vector_type &y)const
     {
         // T res(0.f);
         // for (int i = 0;i < sz_;++i)
@@ -92,26 +105,10 @@ struct cpu_vector_operations
 
         if (use_threaded_dot == 0)
         {
-            if(use_high_prec_ == 1)
-            {
-                dot->use_high_prec();
-            }
-            if(use_high_prec_ == 0)
-            {
-                dot->use_normal_prec();
-            }
             dot_res = dot->dot(x, y);
         }
         else
         {
-            if(use_high_prec_ == 1)
-            {
-                threaded_dot->use_high_prec();
-            }
-            if(use_high_prec_ == 0)
-            {
-                threaded_dot->use_normal_prec();
-            }
             dot_res = threaded_dot->dot(x, y);            
         }
         return dot_res;

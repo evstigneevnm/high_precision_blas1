@@ -8,6 +8,7 @@
 #include <iostream>
 #include <iomanip>
 #include <cmath>
+#include <complex>
 #include <../gmp/install/include/gmpxx.h>
 #include <thrust/complex.h>
 
@@ -16,6 +17,7 @@ class asum_gmp
 {
 using TC = thrust::complex<T>;
 using TC_HP = thrust::complex<mpf_class>;
+using TC_STL = std::complex<mpf_class>;
 
 private:
     T_vec X;
@@ -55,7 +57,7 @@ public:
         mpf_class s_l = mpf_class(0, exact_prec_bits);
         for(size_t j=0;j<N;j++)
         {
-            TC_HP x_l(X[j]);
+            TC_STL x_l( std::complex<T>(X[j]));
             s_l = abs(x_l.real()) + abs(x_l.imag());
             s_m = s_m + s_l;
         }

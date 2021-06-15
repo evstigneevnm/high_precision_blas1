@@ -28,7 +28,7 @@ int main(int argc, char const *argv[])
     using min_max_t = gpu_reduction_t::min_max_t;
     using dot_exact_t = dot_product_gmp<T, T_vec>;
     using sum_exact_t = sum_gmp<T, T_vec>;
-    using generate_vector_pair_t = generate_vector_pair<gpu_vector_operations_t, dot_exact_t, gpu_reduction_t>;
+    using generate_vector_pair_t = generate_vector_pair<gpu_vector_operations_t, dot_exact_t, gpu_reduction_t, gpu_reduction_ogita_t>;
     using threaded_reduction_t = threaded_reduction<T, T_vec>;
 
     if(argc != 7)
@@ -88,7 +88,7 @@ int main(int argc, char const *argv[])
     // printf("sum = %lf \n", sum);
     // printf("mean= %lf \n", sum/T(vec_size));
 
-    generate_vector_pair_t generator(&g_vecs, &dp_ref, &reduction);
+    generate_vector_pair_t generator(&g_vecs, &dp_ref, &reduction, &reduciton_ogita);
     T cond_estimste = generator.generate(u1_d, u2_d, cond_number_);
     printf("condition estimate = %le\n", cond_estimste);
     // g_vecs.assign_scalar(1.0, u1_d);

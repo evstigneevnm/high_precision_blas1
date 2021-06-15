@@ -10,10 +10,8 @@
 #include <common/gpu_vector_operations.h>
 #include <common/cpu_vector_operations.h>
 #include <common/threaded_reduction.h>
-#include <common/testing/gpu_reduction_ogita.h>
-#include <high_prec/dot_product_gmp.hpp>
-#include <common/gpu_reduction.h>
-#include <generate_vector_pair.hpp>
+#include <high_prec/dot_product_gmp_complex.hpp>
+#include <generate_vector_pair_complex.hpp>
 #include <chrono>
 #include <string>
 #include <fstream>
@@ -24,8 +22,6 @@ T normalize_error(T error_)
 {
     return( error_>T(1.0)?1.0:error_ );
 }
-
-
 
 
 
@@ -43,22 +39,32 @@ std::string return_type_name(double some_var)
     return("double");
 }
 
+template<>
+std::string return_type_name(thrust::complex<float> some_var)
+{
+    return("complex_float");
+}
+template<>
+std::string return_type_name(thrust::complex<double> some_var)
+{
+    return("complex_double");
+}
 
 int main(int argc, char const *argv[])
 {
     
     using T = TYPE;
-    using complex = thrust::complex<T>;
+    using TC = thrust::complex<T>;
+    using gpu_vector_operationsC_t = gpu_vector_operations<TC>;
+    using cpu_vector_operationsC_t = cpu_vector_operations<TC>;
     using gpu_vector_operations_t = gpu_vector_operations<T>;
     using cpu_vector_operations_t = cpu_vector_operations<T>;
     using T_vec = gpu_vector_operations_t::vector_type;
-    using gpu_reduction_t = gpu_reduction<T, T_vec>;
-    using gpu_reduction_ogita_t = gpu_reduction_ogita<T, T_vec>; 
-    using gpu_reduction_ogita_double_t = gpu_reduction_ogita<double, double*>; 
-    using min_max_t = gpu_reduction_t::min_max_t;
-    using dot_exact_t = dot_product_gmp<T, T_vec>;
-    using generate_vector_pair_t = generate_vector_pair<gpu_vector_operations_t, dot_exact_t, gpu_reduction_ogita_t, gpu_reduction_ogita_double_t>;
-    using threaded_reduction_t = threaded_reduction<T, T_vec>;
+    using TC_vec = gpu_vector_operationsC_t::vector_type;
+
+    using dot_exact_t = dot_product_gmp_complex<T, T_vec>;
+    using generate_vector_pair_t = generate_vector_pair_complex<gpu_vector_operationsC_t,gpu_vector_operations_t, dot_exact_t>;
+    using threaded_reduction_t = threaded_reduction<TC, TC_vec>;
     using error_bounds_t = error_bounds<T>;    
 
 
@@ -77,30 +83,30 @@ int main(int argc, char const *argv[])
     T cond_number_max = atof(argv[3]);
     T cond_step_ = atof(argv[4]);
     int executions_step = atof(argv[5]);
-    std::string type_name = return_type_name<T>(cond_number_max);
+    std::string type_name = return_type_name<TC>( TC(1.0) );
     init_cuda(gpu_pci_id);
     int dot_prod_type_initial = 0;
     dot_exact_t dp_ref(1024);
 
     cublas_wrap *CUBLAS_ref = new cublas_wrap(true);
+    gpu_vector_operationsC_t g_vecCs(vec_size, CUBLAS_ref);
+    cpu_vector_operationsC_t c_vecCs(vec_size, dot_prod_type_initial);
     gpu_vector_operations_t g_vecs(vec_size, CUBLAS_ref);
     cpu_vector_operations_t c_vecs(vec_size, dot_prod_type_initial);
-    gpu_reduction_t reduction(vec_size);
-    gpu_reduction_ogita_t reduction_ogita(vec_size);
-    gpu_reduction_ogita_double_t reduction_ogita_double(vec_size);
+
     threaded_reduction_t threaded_reduce(vec_size, -1, dot_prod_type_initial);
     error_bounds_t err_bnd;
 
     std::cout << "Machine epsilon is " << err_bnd.macheps() << " " << std::endl;
 
-    T *u1_d; T *u2_d; T *u1_c; T *u2_c;
+    TC_vec u1_d; TC_vec u2_d; TC_vec u1_c; TC_vec u2_c;
 
-    g_vecs.init_vector(u1_d); g_vecs.init_vector(u2_d);
-    g_vecs.start_use_vector(u1_d); g_vecs.start_use_vector(u2_d);
-    c_vecs.init_vector(u1_c); c_vecs.init_vector(u2_c); 
-    c_vecs.start_use_vector(u1_c); c_vecs.start_use_vector(u2_c);
+    g_vecCs.init_vector(u1_d); g_vecCs.init_vector(u2_d);
+    g_vecCs.start_use_vector(u1_d); g_vecCs.start_use_vector(u2_d);
+    c_vecCs.init_vector(u1_c); c_vecCs.init_vector(u2_c); 
+    c_vecCs.start_use_vector(u1_c); c_vecCs.start_use_vector(u2_c);
     printf("using vectors of size = %le\n", double(vec_size) );
-    generate_vector_pair_t generator(&g_vecs, &dp_ref, &reduction_ogita, &reduction_ogita_double);
+    generate_vector_pair_t generator(&g_vecCs, &g_vecs, &dp_ref);
     
 
     T cond_number = T(1.0);
@@ -114,32 +120,38 @@ int main(int argc, char const *argv[])
         
         for(int le = 0; le < executions_step; le++)
         {
-            T cond_estimste = generator.generate(u1_d, u2_d, cond_number);
-            printf("condition estimate = %le\n", cond_estimste);
-            T dot_prod_BLAS = g_vecs.scalar_prod(u1_d, u2_d);
-            T dot_prod_reduct = reduction.dot(u1_d, u2_d);
-            T dot_prod_reduct_ogita = reduction_ogita.dot(u1_d, u2_d);
-            printf("dot_L  = %.24le \n", double(dot_prod_BLAS) );  
-            printf("dot_G  = %.24le \n", double(dot_prod_reduct) );        
+            auto cond_estimste = generator.generate(u1_d, u2_d, cond_number);
+            std::cout << "condition estimate = re(" << cond_estimste.first << "), im(" << cond_estimste.second << ")" << std::endl;
+            g_vecCs.use_standard_precision();
+            TC dot_prod_BLAS = g_vecCs.scalar_prod(u1_d, u2_d);
+            g_vecCs.use_high_precision();
+            TC dot_prod_reduct_ogita = g_vecCs.scalar_prod(u1_d, u2_d);
+            g_vecCs.use_standard_precision();
+            std::cout << std::scientific << "dot_L  = " << dot_prod_BLAS << std::endl;   
+
+
+            g_vecCs.get(u1_d, u1_c);
+            g_vecCs.get(u2_d, u2_c);
             
-            g_vecs.get(u1_d, u1_c);
-            g_vecs.get(u2_d, u2_c);
+            threaded_reduce.use_standard_precision();            
+            TC dot_prod_th = threaded_reduce.dot(u1_c, u2_c);
+            threaded_reduce.use_high_precision();
+            TC dot_prod_th_H = threaded_reduce.dot(u1_c, u2_c);
+            threaded_reduce.use_standard_precision();
             
-            threaded_reduce.use_normal_prec();            
-            T dot_prod_th = threaded_reduce.dot(u1_c, u2_c);
-            threaded_reduce.use_high_prec();
-            T dot_prod_th_H = threaded_reduce.dot(u1_c, u2_c);
-            threaded_reduce.use_normal_prec();
+            c_vecCs.use_standard_precision();
+            TC dot_prod = c_vecCs.scalar_prod(u1_c, u2_c);
+            c_vecCs.use_high_precision();
+            TC dot_prod_H = c_vecCs.scalar_prod(u1_c, u2_c);            
+            c_vecCs.use_standard_precision();
 
-            T dot_prod = c_vecs.scalar_prod(u1_c, u2_c, 0);
-            T dot_prod_H = c_vecs.scalar_prod(u1_c, u2_c, 1);            
-
-            printf("dot_C  = %.24le \n", double(dot_prod) );
-            printf("dot_Ct = %.24le \n", double(dot_prod_th) );
-            printf("*dot_CH= %.24le \n", double(dot_prod_H) );
-            printf("*dotCtH= %.24le \n", double(dot_prod_th_H) );
-            printf("*dot_OG= %.24le \n", double(dot_prod_reduct_ogita) );            
-
+            std::cout << std::scientific << "dot_C  = " << dot_prod << std::endl;
+            std::cout << std::scientific << "dot_Ct = " << dot_prod_th << std::endl;
+            std::cout << std::scientific << "*dot_CH= " << dot_prod_H << std::endl;
+            std::cout << std::scientific << "*dotCtH= " << dot_prod_th_H << std::endl;
+            std::cout << std::scientific << "*dot_OG= " << dot_prod_reduct_ogita << std::endl;
+           
+/*            
             dp_ref.set_arrays(vec_size, u1_c, u2_c);
             T ref_exact = dp_ref.dot_exact();            
 
@@ -173,15 +185,15 @@ int main(int argc, char const *argv[])
             {
                 throw std::runtime_error("error while writing to file: " + f_name);
             }
-
+*/
         }
 
         cond_number *= cond_step_;
     }
     f.close();
 
-    c_vecs.free_vector(u1_c); c_vecs.free_vector(u2_c);    
-    g_vecs.free_vector(u1_d); g_vecs.free_vector(u2_d);
+    c_vecCs.free_vector(u1_c); c_vecCs.free_vector(u2_c);    
+    g_vecCs.free_vector(u1_d); g_vecCs.free_vector(u2_d);
     
 
     delete CUBLAS_ref;

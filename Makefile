@@ -3,9 +3,9 @@ FTYPE = -DTYPE=float
 NVCC = /usr/local/cuda/bin/nvcc
 GCC = /usr/bin/gcc
 GPP = /usr/bin/g++
-GCC_kern = /usr/bin/g++-5
+GCC_kern = /usr/bin/g++
 SM_CUDA = sm_35
-CPP_STANDARD = c++11
+CPP_STANDARD = c++14
 
 NVCCFLAGS = -Wno-deprecated-gpu-targets -g -arch=$(SM_CUDA) -std=$(CPP_STANDARD) -ccbin=$(GCC_kern)
 NVCCFLAGS_R = -Wno-deprecated-gpu-targets -O3 -arch=$(SM_CUDA) -std=$(CPP_STANDARD) -ccbin=$(GCC_kern)
@@ -16,7 +16,7 @@ GCCFLAGS_RN = -O3 -std=$(CPP_STANDARD) -Xcompiler -pthread
 ICUDA = -I/usr/local/cuda/include
 IPROJECT = -I source/
 IBOOST = -I/home/noctum/boost_1_70/include/
-IGMP = -I gmp/install/include
+IGMP = -I /opt/gmp/include
 
 LCUDA = -L/usr/local/cuda/lib64
 LBOOST = -L/home/noctum/boost_1_70/lib/
@@ -24,7 +24,7 @@ LIBS1 = -lcublas -lcurand
 LIBS2 = -lcufft -lcublas -lcurand 
 LIBBOOST = -lboost_serialization
 LLAPACK = -L/opt/OpenBLAS/lib -lopenblas
-LGMP = -L gmp/install/lib -lgmp -lgmpxx
+LGMP = -L /opt/gmp/lib -lgmp -lgmpxx
 
 
 test_batch2:
@@ -59,7 +59,8 @@ reduction_ogita_kern:
 
 helper_kern:
 	$(NVCC) $(NVCCFLAGS) $(IPROJECT) source/generate_vector_pair_kernels_helper.cu -c -o ./cuda_helper_kers.o
-
+helper_kernC:
+	$(NVCC) $(NVCCFLAGS) $(IPROJECT) source/generate_vector_pair_kernels_helper_complex.cu -c -o ./cuda_helper_kers_complex.o
 vec_D:
 	$(NVCC) $(NVCCFLAGS_R) $(DTYPE) $(IPROJECT) $(ICUDA) $(IGMP) source/test_vector_operations.cpp $(LGMP) $(LCUDA) $(LIBS2)  gpu_vec_kers.o cuda_reduction_kers.o cuda_helper_kers.o cuda_reduction_ogita_kers.o -o test_vector_operations.bin
 vec_F:
@@ -71,7 +72,15 @@ vecC_F:
 	$(NVCC) $(NVCCFLAGS_R) $(FTYPE) $(IPROJECT) $(ICUDA) $(IGMP) source/test_vector_operations_complex.cpp $(LGMP) $(LCUDA) $(LIBS2)  gpu_vec_kers.o cuda_reduction_kers.o cuda_helper_kers.o cuda_reduction_ogita_kers.o -o test_vector_operations_complex.bin
 
 bench_D:
-	$(NVCC) $(GCCFLAGS_RN) $(DTYPE) $(IPROJECT) $(ICUDA) $(IGMP) source/obtain_condition_precision.cpp $(LGMP) $(LCUDA) $(LIBS2)  gpu_vec_kers.o cuda_reduction_kers.o cuda_helper_kers.o cuda_reduction_ogita_kers.o -o benchmark.bin
+	$(NVCC) $(GCCFLAGS_RN) $(DTYPE) $(IPROJECT) $(ICUDA) $(IGMP) source/obtain_condition_precision.cpp $(LGMP) $(LCUDA) $(LIBS2)  gpu_vec_kers.o cuda_reduction_kers.o cuda_helper_kers.o cuda_reduction_ogita_kers.o -o benchmark_D.bin
 bench_F:
-	$(NVCC) $(GCCFLAGS_RN) $(FTYPE) $(IPROJECT) $(ICUDA) $(IGMP) source/obtain_condition_precision.cpp $(LGMP) $(LCUDA) $(LIBS2)  gpu_vec_kers.o cuda_reduction_kers.o cuda_helper_kers.o cuda_reduction_ogita_kers.o -o benchmark.bin
+	$(NVCC) $(GCCFLAGS_RN) $(FTYPE) $(IPROJECT) $(ICUDA) $(IGMP) source/obtain_condition_precision.cpp $(LGMP) $(LCUDA) $(LIBS2)  gpu_vec_kers.o cuda_reduction_kers.o cuda_helper_kers.o cuda_reduction_ogita_kers.o -o benchmark_F.bin
 
+benchC_D:
+	$(NVCC) $(GCCFLAGS_RN) $(DTYPE) $(IPROJECT) $(ICUDA) $(IGMP) source/obtain_condition_precision_complex.cpp $(LGMP) $(LCUDA) $(LIBS2)  gpu_vec_kers.o  cuda_reduction_kers.o cuda_reduction_ogita_kers.o cuda_helper_kers_complex.o -o benchmark_complex_D.bin
+benchC_F:
+	$(NVCC) $(GCCFLAGS_RN) $(FTYPE) $(IPROJECT) $(ICUDA) $(IGMP) source/obtain_condition_precision_complex.cpp $(LGMP) $(LCUDA) $(LIBS2)  gpu_vec_kers.o cuda_reduction_kers.o cuda_reduction_kers.o cuda_helper_kers_complex.o -o benchmark_complex_F.bin
+
+
+test_reduction:
+	$(NVCC) $(NVCCFLAGS_R) $(DTYPE) $(IPROJECT) $(ICUDA) $(IGMP) source/test_reduction.cpp $(LCUDA) $(LIBS1)  gpu_vec_kers.o cuda_reduction_kers.o cuda_reduction_ogita_kers.o -o test_reduction.bin

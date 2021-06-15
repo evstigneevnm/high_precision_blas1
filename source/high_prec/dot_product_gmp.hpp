@@ -8,7 +8,7 @@
 #include <iostream>
 #include <iomanip>
 #include <cmath>
-#include <../gmp/install/include/gmpxx.h>
+#include <gmpxx.h>
 
 
 template<class T, class T_vec>
@@ -28,7 +28,7 @@ private:
 
 
 public:
-    dot_product_gmp(unsigned int exact_prec_bits_ = 512):
+    dot_product_gmp(unsigned int exact_prec_bits_ = 512, bool use_gpu_ = false):
     exact_prec_bits(exact_prec_bits_)
     {
         mpf_set_default_prec(exact_prec_bits);

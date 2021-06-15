@@ -45,6 +45,80 @@ void generate_vector_pair_helper<T, T_vec, BLOCK_SIZE>::generate_C_estimated_vec
 }
 
 
+template<class T>
+__device__ T abs_cuda(T x);
+
+template<>
+__device__ float abs_cuda(float x)
+{
+    return(fabsf(x));
+}
+template<>
+__device__ double abs_cuda(double x)
+{
+    return(fabs(x));
+}
+
+
+template<class T, class T_vec>
+__global__ void return_abs_vec_kernel(size_t N, const T_vec x_in, T_vec x_out)
+{
+    unsigned int j = blockIdx.x*blockDim.x + threadIdx.x;
+    if(j>=N)
+    {
+        return;
+    }
+    x_out[j] = abs_cuda<T>(x_in[j]);
+
+}
+
+template<class T, class T_vec>
+__global__ void return_abs_vec_inplace_kernel(size_t N, T_vec x_)
+{
+    unsigned int j = blockIdx.x*blockDim.x + threadIdx.x;
+    if(j>=N)
+    {
+        return;
+    }
+    x_[j] = abs_cuda<T>(x_[j]);
+
+}
+
+template<class T, class T_vec>
+__global__ void convert_vector_T_to_double_kernel(size_t N, T_vec x_T_, double* x_D_)
+{
+    unsigned int j = blockIdx.x*blockDim.x + threadIdx.x;
+    if(j>=N)
+    {
+        return;
+    }
+    x_D_[j] = double(x_T_[j]);
+
+}
+
+
+template<class T, class T_vec, int BLOCK_SIZE>
+void generate_vector_pair_helper<T, T_vec, BLOCK_SIZE>::return_abs_vec(const T_vec x_in, T_vec x_out)
+{
+    return_abs_vec_kernel<T, T_vec><<<dimGrid, dimBlock>>>(sz, x_in, x_out);
+}
+template<class T, class T_vec, int BLOCK_SIZE>
+void generate_vector_pair_helper<T, T_vec, BLOCK_SIZE>::return_abs_vec_inplace(T_vec x_)
+{
+    return_abs_vec_inplace_kernel<T, T_vec><<<dimGrid, dimBlock>>>(sz, x_);
+}
+
+template<class T, class T_vec, int BLOCK_SIZE>
+void generate_vector_pair_helper<T, T_vec, BLOCK_SIZE>::return_abs_double_vec_inplace(double* x_)
+{
+    return_abs_vec_inplace_kernel<double, double*><<<dimGrid, dimBlock>>>(sz, x_);
+}
+
+template<class T, class T_vec, int BLOCK_SIZE>
+void generate_vector_pair_helper<T, T_vec, BLOCK_SIZE>::convert_vector_T_to_double(T_vec x_T_, double* x_D_)
+{
+    convert_vector_T_to_double_kernel<T, T_vec><<<dimGrid, dimBlock>>>(sz, x_T_, x_D_);
+}
 
 
 #endif

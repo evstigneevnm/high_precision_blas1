@@ -28,7 +28,7 @@ private:
 
 
 public:
-    sum_gmp(unsigned int exact_prec_bits_ = 512):
+    sum_gmp(unsigned int exact_prec_bits_ = 512, bool use_gpu_ = false):
     exact_prec_bits(exact_prec_bits_)
     {
         mpf_set_default_prec(exact_prec_bits);

@@ -8,15 +8,24 @@
 #include <iostream>
 #include <iomanip>
 #include <cmath>
-#include <../gmp/install/include/gmpxx.h>
+#include <complex>
+#include </opt/gmp/include/gmpxx.h>
 #include <thrust/complex.h>
 
+
+/**
+ * @brief      This class describes a variable precision dot product of complex floating point vectors using GMP.
+ *
+ * @tparam     T      { basic floating point type i.e. float or double }
+ * @tparam     T_vec  { vector type with the basic complex type induced by basic type T }
+ */
 template<class T, class T_vec>
 class dot_product_gmp_complex
 {
 
 using TC = thrust::complex<T>;
-using TC_HP = thrust::complex<mpf_class>;
+// using TC_HP = thrust::complex<mpf_class>; // dosn't work due to forced allign! bug in thrust!
+using TC_STL = std::complex<mpf_class>;
 
 private:
     T_vec X;
@@ -25,7 +34,8 @@ private:
     unsigned int exact_prec_bits;
     size_t N;
 
-    TC_HP dot_m;
+    TC_STL dot_m_std;
+    //TC_HP dot_m;
     T_vec dot_s;
 
 
@@ -56,24 +66,25 @@ public:
 
         for(size_t j=0;j<N;j++)
         {
-            TC_HP x_l(conj(X[j]) );
-            TC_HP y_l(Y[j]);
-            dot_m = dot_m + x_l*y_l;
+            TC_STL x_l( std::complex<T>(conj(X[j]) ) );
+            TC_STL y_l( std::complex<T>(Y[j]) );
+            dot_m_std = dot_m_std + x_l*y_l;
         }
         
-        thrust::complex<double> dot_exact_T = TC( dot_m.real().get_d(), dot_m.imag().get_d() );
+        thrust::complex<double> dot_exact_T = TC( dot_m_std.real().get_d(), dot_m_std.imag().get_d() );
         
         return TC(dot_exact_T);
     }
     
     void print_res()
     {
-        std::cout << std::scientific << std::setprecision(128) << dot_m << std::endl;
+        //long double prec.
+        std::cout << std::scientific << std::setprecision(128) << dot_m_std << std::endl;
     }
     T get_error(const TC& approx_res_)
     {
-        TC_HP dot_v_m(approx_res_);
-        TC_HP errC_m = dot_v_m - dot_m;
+        TC_STL dot_v_m( std::complex<T>(approx_res_.real(), approx_res_.imag()) );
+        TC_STL errC_m = dot_v_m - dot_m_std;
         mpf_class err_m = abs(errC_m);
 
         double err_d = err_m.get_d();
@@ -81,27 +92,26 @@ public:
     }
     T get_error_T(const TC& approx_res_)
     {
-        TC dot_c = TC(dot_m.real().get_d(), dot_m.imag().get_d() );
-        TC err_c = approx_res_ - dot_c;
+        TC_STL dot_c = TC_STL(dot_m_std.real().get_d(), dot_m_std.imag().get_d() );
+        TC_STL err_c = TC_STL(approx_res_) - dot_c;
         
 
-        return abs(err_c);
+        return std::abs(err_c);
     }
     T get_error_relative(const TC& approx_res_)
     {
-        TC_HP dot_v_m(approx_res_);
-        TC_HP errC_m = (dot_v_m - dot_m)/abs(dot_m);
-        mpf_class err_m = abs(errC_m);
-
+        TC_STL dot_v_m(std::complex<T>(approx_res_.real(), approx_res_.imag()));
+        TC_STL errC_m = (dot_v_m + (-dot_m_std))/abs(dot_m_std);
+        mpf_class err_m = std::abs(errC_m);
         double err_d = err_m.get_d();
         return T(err_d);
     }    
     T get_error_relative_T(const TC& approx_res_)
     {
-        TC dot_c = TC(dot_m.real().get_d(), dot_m.imag().get_d() );        
-        TC err_d = (approx_res_ - dot_c )/abs(dot_m).get_d();
+        TC_STL dot_c = TC_STL(dot_m_std.real().get_d(), dot_m_std.imag().get_d() );        
+        TC_STL err_d = (approx_res_ - dot_c )/abs(dot_m_std).get_d();
         
-        return abs(err_d);
+        return std::abs(err_d);
     }  
 
 };
