@@ -120,13 +120,13 @@ __device__ __forceinline__ thrust::complex<float> __GPU_REDUCTION_OGITA_H__two_p
     T_real t_R2 = _fma<T_real>(a_I, b_I, -p_R2);
     T_real p_I1 = a_R*b_I;
     T_real t_I1 = _fma<T_real>(a_R, b_I, -p_I1);
-    T_real p_I2 = a_I*b_R;
-    T_real t_I2 = _fma<T_real>(a_I, b_R, -p_I2);
+    T_real p_I2 = -a_I*b_R;
+    T_real t_I2 = _fma<T_real>(-a_I, b_R, -p_I2);
 
     T_real t1 = T_real(0.0);
     T_real t2 = T_real(0.0);
     T_real p_R = __GPU_REDUCTION_OGITA_H__two_sum_device<T_real>(t1, p_R1, p_R2);
-    T_real p_I = __GPU_REDUCTION_OGITA_H__two_sum_device<T_real>(t2, p_I1, -p_I2);
+    T_real p_I = __GPU_REDUCTION_OGITA_H__two_sum_device<T_real>(t2, p_I1, p_I2);
     
     TC p = TC(p_R, p_I);
     
@@ -155,13 +155,13 @@ __device__ __forceinline__ thrust::complex<double> __GPU_REDUCTION_OGITA_H__two_
     T_real t_R2 = _fma<T_real>(a_I, b_I, -p_R2);
     T_real p_I1 = a_R*b_I;
     T_real t_I1 = _fma<T_real>(a_R, b_I, -p_I1);
-    T_real p_I2 = a_I*b_R;
-    T_real t_I2 = _fma<T_real>(a_I, b_R, -p_I2);
+    T_real p_I2 = -a_I*b_R;
+    T_real t_I2 = _fma<T_real>(-a_I, b_R, -p_I2);
 
     T_real t1 = T_real(0.0);
     T_real t2 = T_real(0.0);
     T_real p_R = __GPU_REDUCTION_OGITA_H__two_sum_device<T_real>(t1, p_R1, p_R2);
-    T_real p_I = __GPU_REDUCTION_OGITA_H__two_sum_device<T_real>(t2, p_I1, -p_I2);
+    T_real p_I = __GPU_REDUCTION_OGITA_H__two_sum_device<T_real>(t2, p_I1, p_I2);
  
     TC p = TC(p_R, p_I);
     

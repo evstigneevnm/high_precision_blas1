@@ -263,13 +263,13 @@ private:
             T_real t_R2 = std::fma<T_real>(a_I, b_I, -p_R2);
             T_real p_I1 = a_R*b_I;
             T_real t_I1 = std::fma<T_real>(a_R, b_I, -p_I1);
-            T_real p_I2 = a_I*b_R;
-            T_real t_I2 = std::fma<T_real>(a_I, b_R, -p_I2);
+            T_real p_I2 = -a_I*b_R;
+            T_real t_I2 = std::fma<T_real>(-a_I, b_R, -p_I2);
 
             T_real t1 = T_real(0.0);
             T_real t2 = T_real(0.0);
             T_real p_R = two_sum<T_real>(t1, p_R1, p_R2);
-            T_real p_I = two_sum<T_real>(t2, p_I1, -p_I2);
+            T_real p_I = two_sum<T_real>(t2, p_I1, p_I2);
             
             TC p = TC(p_R, p_I);
             t = TC(t_R1 + t_R2 + t1, t_I1 + t_I2 + t2);

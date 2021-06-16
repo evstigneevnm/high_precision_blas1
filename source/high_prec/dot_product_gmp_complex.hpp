@@ -35,6 +35,8 @@ private:
     size_t N;
 
     TC_STL dot_m_std;
+    mpf_class dot_real;
+    mpf_class dot_imag;
     //TC_HP dot_m;
     T_vec dot_s;
 
@@ -65,15 +67,22 @@ public:
     {
 
         dot_m_std = mpf_class(0, exact_prec_bits);
+        dot_real = mpf_class(0, exact_prec_bits);
+        dot_imag = mpf_class(0, exact_prec_bits);
+
         for(size_t j=0;j<N;j++)
         {
             
-            TC_STL x_l( std::complex<T>(conj(X[j])) );
-            TC_STL y_l( std::complex<T>(Y[j]) );
-            dot_m_std = dot_m_std + x_l*y_l;
+            mpf_class x_real(X[j].real(), exact_prec_bits);
+            mpf_class x_imag(X[j].imag(), exact_prec_bits);
+            mpf_class y_real(Y[j].real(), exact_prec_bits);
+            mpf_class y_imag(Y[j].imag(), exact_prec_bits);
+
+            dot_real = dot_real + x_real*y_real + x_imag*y_imag;
+            dot_imag = dot_imag + x_real*y_imag - x_imag*y_real;
         }
-        
-        thrust::complex<double> dot_exact_T = TC( dot_m_std.real().get_d(), dot_m_std.imag().get_d() );
+        dot_m_std = TC_STL(dot_real, dot_imag);
+        TC dot_exact_T = TC(dot_real.get_d(),  dot_imag.get_d() );
         
         return TC(dot_exact_T);
     }
@@ -83,40 +92,48 @@ public:
         //long double prec.
         std::cout << std::scientific << std::setprecision(128) << dot_m_std << std::endl;
     }
-    T get_error(const TC& approx_res_)
+    TC get_error(const TC approx_res_)
     {
-        TC_STL dot_v_m( std::complex<T>(approx_res_.real(), approx_res_.imag()) );
+        mpf_class ap_res_real = mpf_class(approx_res_.real(), exact_prec_bits);
+        mpf_class ap_res_imag = mpf_class(approx_res_.imag(), exact_prec_bits);
+
+        TC_STL dot_v_m( ap_res_real, ap_res_imag );
         TC_STL errC_m = dot_v_m - dot_m_std;
-        mpf_class err_m = abs(errC_m);
 
-        double err_d = err_m.get_d();
-        return T(err_d);
+        return TC( std::abs(errC_m.real().get_d()), std::abs(errC_m.imag().get_d()) );
     }
-    T get_error_T(const TC& approx_res_)
-    {
-        TC_STL dot_c = TC_STL(dot_m_std.real().get_d(), dot_m_std.imag().get_d() );
-        TC_STL err_c = TC_STL(approx_res_) - dot_c;
-        
 
-        return std::abs(err_c);
-    }
     TC get_error_relative(const TC& approx_res_)
     {
-        TC_STL dot_v_m(std::complex<T>(approx_res_.real(), approx_res_.imag()));
+        mpf_class ap_res_real = mpf_class(approx_res_.real(), exact_prec_bits);
+        mpf_class ap_res_imag = mpf_class(approx_res_.imag(), exact_prec_bits);
+
+        TC_STL dot_v_m(ap_res_real, ap_res_imag);
         TC_STL errC_m = dot_v_m - dot_m_std;
-        TR err_re = errC_m.real()/dot_m_std.real();
-        TR err_im = errC_m.imag()/dot_m_std.imag();
-        errC_m = TC_STL(abs(err_re), abs(err_im));
-        TC errThrust = TC( errC_m.real().get_d(), errC_m.imag().get_d() );
+        mpf_class err_re = errC_m.real();
+        if( abs(dot_m_std.real())>0 )
+        {
+            err_re = errC_m.real()/dot_m_std.real();
+        }
+        else
+        {
+            err_re = 0;
+        }
+
+        mpf_class err_im = errC_m.imag();
+        if(abs(dot_m_std.imag())>0 )
+        {
+            err_im = errC_m.imag()/dot_m_std.imag();
+        }
+        else
+        {
+            err_im = 0;
+        }
+        
+        TC errThrust = TC( std::abs(err_re.get_d()), std::abs(err_im.get_d()) );
         return errThrust;
     }    
-    T get_error_relative_T(const TC& approx_res_)
-    {
-        TC_STL dot_c = TC_STL(dot_m_std.real().get_d(), dot_m_std.imag().get_d() );        
-        TC_STL err_d = (approx_res_ - dot_c )/abs(dot_m_std).get_d();
-        
-        return std::abs(err_d);
-    }  
+ 
 
 };
 

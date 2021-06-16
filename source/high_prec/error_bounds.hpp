@@ -235,8 +235,9 @@ private:
     }
     void ogita_dot_bound_complex(size_t n, T condition_number)
     {
-        long double gamma_n = gamma(n+2);
-        dot.complex.compensated.sequential = eps + 0.5*gamma_n*gamma_n*(static_cast<long double>(condition_number));
+        long double gamma_n = gamma(n);
+        long double gamma_2 = gamma(2);
+        dot.complex.compensated.sequential = eps + 0.5*(gamma_n*gamma_n + gamma_n*gamma_2 + gamma_2*gamma_2 + gamma_n*gamma_n*gamma_2)*(static_cast<long double>(condition_number));
     }
     void comp_block_dot_bound_real(size_t b, size_t k, T condition_number)
     {

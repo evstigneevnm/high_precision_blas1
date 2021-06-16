@@ -56,6 +56,11 @@ std::string return_type_name(thrust::complex<double> some_var)
     return("complex_double");
 }
 
+
+
+
+
+
 int main(int argc, char const *argv[])
 {
     
@@ -68,7 +73,7 @@ int main(int argc, char const *argv[])
     using T_vec = gpu_vector_operations_t::vector_type;
     using TC_vec = gpu_vector_operationsC_t::vector_type;
 
-    using dot_exact_t = dot_product_gmp<T, T_vec>;
+    using dot_exact_t = dot_product_gmp<double, double*>;
     using dot_exact_complex_t = dot_product_gmp_complex<T, TC_vec>;
     using generate_vector_pair_t = generate_vector_pair_complex<gpu_vector_operationsC_t,gpu_vector_operations_t, dot_exact_t>;
     using threaded_reduction_t = threaded_reduction<TC, TC_vec>;
@@ -117,20 +122,29 @@ int main(int argc, char const *argv[])
     c_vecCs.start_use_vector(u1_c); c_vecCs.start_use_vector(u2_c);
     printf("using vectors of size = %le\n", double(vec_size) );
     generate_vector_pair_t generator(&g_vecCs, &g_vecs, &dp_ref);
-    
+
+    generator.dot_exact();  
 
     T cond_number = T(1.0);
 
     std::string f_name = type_name + "_vec_size" + std::to_string(vec_size) + "_Cmax" + std::to_string(std::round(cond_number_max)) + ".dat";
     std::ofstream f(f_name.c_str(), std::ofstream::out);
     if (!f) throw std::runtime_error("error while opening file for writing: " + f_name);
-
-    while( cond_number <= cond_number_max)
+    
+    int count_above = executions_step;
+    while( count_above > 0)
     {
-        
+        if(cond_number > cond_number_max)
+        {
+            count_above--;
+        }
+
         for(int le = 0; le < executions_step; le++)
         {
             auto cond_estimste = generator.generate(u1_d, u2_d, cond_number);
+
+            TC abs_dot = generator.get_dot_of_abs_vectors();
+
             std::cout << "condition estimate = re(" << cond_estimste.first << "), im(" << cond_estimste.second << ")" << std::endl;
             g_vecCs.use_standard_precision();
             TC dot_prod_BLAS = g_vecCs.scalar_prod(u1_d, u2_d);
@@ -169,6 +183,8 @@ int main(int argc, char const *argv[])
             std::cout << "max cond_number = " << cond_estimste_max << std::endl;
             err_bnd.generate_complex_dot(vec_size, std::max(cond_estimste.first, cond_estimste.second), 24);
 
+
+
             TC error_exact_L = dp_ref_complex.get_error_relative(dot_prod_BLAS);
             TC error_exact_ogita_G = dp_ref_complex.get_error_relative(dot_prod_reduct_ogita);
             TC error_exact_C = dp_ref_complex.get_error_relative(dot_prod);
@@ -199,6 +215,8 @@ int main(int argc, char const *argv[])
             {
                 throw std::runtime_error("error while writing to file: " + f_name);
             }
+            
+           
             std::cout << std::endl;
         }
 

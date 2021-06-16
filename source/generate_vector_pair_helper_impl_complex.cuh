@@ -47,7 +47,7 @@ void generate_vector_pair_helper_complex<T, T_vec, BLOCK_SIZE>::generate_C_estim
 
 
 template<class T, class T_vec, class TR, class TR_vec>
-__global__ void split_complex_vector_to_reals_kernel(size_t N, const T_vec x_in, TR_vec xR_out, TR_vec xI_out)
+__global__ void split_complex_vector_to_reals_kernel(size_t N, const T_vec x_in, double* xR_out, double* xI_out)
 {
 
     unsigned int j = blockIdx.x*blockDim.x + threadIdx.x;
@@ -55,12 +55,12 @@ __global__ void split_complex_vector_to_reals_kernel(size_t N, const T_vec x_in,
     {
         return;
     }
-    xR_out[j] = x_in[j].real();
-    xI_out[j] = x_in[j].imag();
+    xR_out[j] = double(x_in[j].real());
+    xI_out[j] = double(x_in[j].imag());
 }
 
 template<class T, class T_vec, int BLOCK_SIZE>
-void generate_vector_pair_helper_complex<T, T_vec, BLOCK_SIZE>::split_complex_vector_to_reals(const T_vec x_in, TR_vec xR_out, TR_vec xI_out)
+void generate_vector_pair_helper_complex<T, T_vec, BLOCK_SIZE>::split_complex_vector_to_reals(const T_vec x_in, double* xR_out, double* xI_out) 
 {
     split_complex_vector_to_reals_kernel<T, T_vec, TR, TR_vec><<<dimGrid, dimBlock>>>(sz, x_in, xR_out, xI_out);
 }

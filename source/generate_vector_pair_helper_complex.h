@@ -29,7 +29,7 @@ public:
     }
     void generate_C_estimated_vector(const TR max_power, const T_vec mantisa_v, const TR_vec exponent_v, T_vec return_v, size_t N_fixed_value = 0);
 
-    void split_complex_vector_to_reals(const T_vec x_in, TR_vec xR_out, TR_vec xI_out);
+    void split_complex_vector_to_reals(const T_vec x_in, double* xR_out, double* xI_out);
 
 
     void return_abs_vec(const TR_vec x_in, TR_vec x_out);
