@@ -165,8 +165,8 @@ private:
     }
     void simple_dot_bound_complex(size_t n, T condition_number)
     {
-        long double gamma_nm1 = gamma(n+2);
-        long double res = 0.5*gamma_nm1*(static_cast<long double>(condition_number));
+        
+        long double res = 0.5*(gamma(n)+gamma(2)+gamma(n)*gamma(2))*(static_cast<long double>(condition_number));
         dot.complex.base.sequential = res;
     }    
     void block_dot_bound_real(size_t b, size_t k, T condition_number)

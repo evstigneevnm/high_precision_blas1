@@ -19,13 +19,17 @@
 #include <fstream>
 #include <high_prec/error_bounds.hpp>
 
-template<class T>
-T normalize_error(T error_)
+template<class Tl>
+Tl normalize_error(Tl error_)
 {
-    return( error_>T(1.0)?1.0:error_ );
+    return( error_>Tl(1.0)?1.0:error_ );
 }
 
-
+template<class TC>
+double normalize_error_max(TC error_)
+{
+    return( normalize_error<double>( std::max(error_.real(), error_.imag()) ) );
+}
 
 template<class T>
 std::string return_type_name(T some_var);
@@ -175,11 +179,11 @@ int main(int argc, char const *argv[])
 
             long double simple_bound_ = normalize_error<long double>(err_bnd.dot.complex.base.sequential);
             long double pairwise_bound_ = normalize_error<long double>(err_bnd.dot.complex.base.pairwise_parallel );
-            long double parallel24_bound_ = normalize_error<long double>(err_bnd.dot.complex.base.pairwise_parallel);
+            long double parallel24_bound_ = normalize_error<long double>(err_bnd.dot.complex.base.block_parallel);
             
             long double ogita_bound_ = normalize_error<long double>(err_bnd.dot.complex.compensated.sequential );
             long double pairwise_comp_bound_ = normalize_error<long double>(err_bnd.dot.complex.compensated.pairwise_parallel );
-            long double parallel_comp_24_bound_ = normalize_error<long double>(err_bnd.dot.complex.compensated.pairwise_parallel);
+            long double parallel_comp_24_bound_ = normalize_error<long double>(err_bnd.dot.complex.compensated.block_parallel);
 
       
         
@@ -188,13 +192,14 @@ int main(int argc, char const *argv[])
             std::cout << "err_Ct = " <<  error_exact_C_th << " | " << parallel24_bound_ << std::endl;
             std::cout << "err_C  = " <<  error_exact_C << " | " << simple_bound_ << std::endl;
             std::cout << "*err_CH = " <<  error_exact_C_H << " | " << ogita_bound_ << std::endl;
-            std::cout << "*errCtH = " <<  error_exact_C_th_H << " | " << parallel_comp_24_bound_ << std::endl;  
-            std::cout << "*err_GH = " <<  error_exact_ogita_G << " | " << pairwise_comp_bound_ << std::endl;          
+            std::cout << "*errCtH = " <<  error_exact_C_th_H << " | " << parallel_comp_24_bound_ << std::endl;
+            std::cout << "*err_GH = " <<  error_exact_ogita_G << " | " << pairwise_comp_bound_ << std::endl;
 
-            // if ( !(f << cond_estimste_max  << " " << normalize_error(error_exact_L) << " " << normalize_error(error_exact_G) << " " << normalize_error(error_exact_ogita_G) << " " << normalize_error(error_exact_C) << " " <<  normalize_error(error_exact_C_H) << " " << normalize_error(error_exact_C_th) << " " << normalize_error(error_exact_C_th_H) << " " << ogita_bound_ << " " << parallel24_bound_ << " " << parallel_comp_24_bound_ << " " << pairwise_bound_ << " " << pairwise_comp_bound_ << " "<< simple_bound_ << std::endl ) )
-            // {
-            //     throw std::runtime_error("error while writing to file: " + f_name);
-            // }
+            if ( !(f << cond_estimste_max  << " " << normalize_error_max(error_exact_L) << " " << normalize_error_max(error_exact_ogita_G) << " " << normalize_error_max(error_exact_C) << " " <<  normalize_error_max(error_exact_C_H) << " " << normalize_error_max(error_exact_C_th) << " " << normalize_error_max(error_exact_C_th_H) << " " << ogita_bound_ << " " << parallel24_bound_ << " " << parallel_comp_24_bound_ << " " << pairwise_bound_ << " " << pairwise_comp_bound_ << " "<< simple_bound_ << std::endl ) )
+            {
+                throw std::runtime_error("error while writing to file: " + f_name);
+            }
+            std::cout << std::endl;
         }
 
         cond_number *= cond_step_;

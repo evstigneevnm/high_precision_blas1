@@ -93,7 +93,7 @@ public:
             s = two_sum(t, s, p);
             c = c + pi + t;
         }
-        //std::cout << "s = " << s << "; c = " << c << std::endl;
+
         return s+c;
     }
 
@@ -151,7 +151,7 @@ public:
         T_real p_I = two_sum<T_real>(t2, p_I1, -p_I2);
         
         TC p = TC(p_R, p_I);
-        t = TC(t_R1 + t_R2 + t1, t_I1 + t_I2 + t2);
+        t = TC(t_R1 + t_R2 + t1, t_I1 + t_I2 - t2);
 
         return p; 
     }
