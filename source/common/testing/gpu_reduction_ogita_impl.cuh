@@ -675,8 +675,6 @@ template<class T, class T_vec, int BLOCK_SIZE, int threads_r>
 void gpu_reduction_ogita<T, T_vec, BLOCK_SIZE, threads_r>::wrapper_reduce_asum(int blocks, int threads, int sdataSize, const T_vec InputV, T_vec OutputV, T_vec errV, int N, bool first_run)
 {
 
-    
-
     dim3 dimBlock(threads, 1, 1);
     dim3 dimGrid(blocks, 1, 1);
     

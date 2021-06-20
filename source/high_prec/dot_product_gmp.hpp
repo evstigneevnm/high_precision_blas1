@@ -9,17 +9,20 @@
 #include <iomanip>
 #include <cmath>
 #include <gmpxx.h>
-
+#include <high_prec/dot_product_cump.hpp>
 
 template<class T, class T_vec>
 class dot_product_gmp
 {
 private:
+    using cump_t = dot_product_cump<T, T_vec>;
     T_vec X;
     T_vec Y;
     bool array_set = false;
+    bool gpu = false;
     unsigned int exact_prec_bits;
     size_t N;
+    cump_t* cump_class = nullptr;
 
     mpf_class s_m;
     T dot_naive_v;
@@ -28,7 +31,7 @@ private:
 
 
 public:
-    dot_product_gmp(unsigned int exact_prec_bits_ = 512, bool use_gpu_ = false):
+    dot_product_gmp(unsigned int exact_prec_bits_ = 512):
     exact_prec_bits(exact_prec_bits_)
     {
         mpf_set_default_prec(exact_prec_bits);
@@ -36,31 +39,61 @@ public:
     
     ~dot_product_gmp()
     {
+        if( cump_class != nullptr)
+        {
+            delete cump_class;
+        }
+    }
+
+    void use_gpu(size_t sz_)
+    {
+        if(cump_class == nullptr)
+        {
+            cump_class = new cump_t(sz_, exact_prec_bits);
+        }
+        gpu = true;
+
+    }
+
+    void use_cpu()
+    {
+        gpu = false;
     }
 
     void set_arrays(size_t N_, T_vec& input_array_1_, T_vec& input_array_2_)
     {
-
+        if(gpu)
+        {
+            cump_class->set_arrays(input_array_1_, input_array_2_);
+        }
         X = input_array_1_;
         Y = input_array_2_;
-
         N = N_;
         array_set = true;
+
     }
     
     T dot_exact()
     {
 
+        
         s_m = mpf_class(0, exact_prec_bits);
-        for(size_t j=0;j<N;j++)
+        
+        if(gpu)
         {
-            mpf_class x_l(X[j], exact_prec_bits);
-            mpf_class y_l(Y[j], exact_prec_bits);
-            s_m = s_m + x_l*y_l;
+            cump_class->dot_exact(s_m);
         }
+        else
+        {
+            for(size_t j=0;j<N;j++)
+            {
+                mpf_class x_l(X[j], exact_prec_bits);
+                mpf_class y_l(Y[j], exact_prec_bits);
+                s_m = s_m + x_l*y_l;
+            }
+        }        
         
         double dot_exact_T = s_m.get_d();
-        
         return T(dot_exact_T);
     }
     

@@ -12,11 +12,11 @@
 
 
 /**
- * @brief      This class describes a generate vector pair for complex vectors.
+ * @brief      This class is a generateor of a complex vector pair with desired condition number.
  *
  * @tparam     VectorOperations      { complex vector operations }
  * @tparam     VectorOperationsR     { real vector operations for expoental generation }
- * @tparam     ExactDotR              { execat dot product of REAL vectors }
+ * @tparam     ExactDotR             { execat dot product of REAL vectors }
  * @tparam     BLOCK_SIZE            { GPU block size }
  */
 template<class VectorOperations, class VectorOperationsR, class ExactDotR, int BLOCK_SIZE = 1024>

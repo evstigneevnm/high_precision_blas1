@@ -152,7 +152,7 @@ int main(int argc, char const *argv[])
             TC dot_prod_reduct_ogita = g_vecCs.scalar_prod(u1_d, u2_d);
             g_vecCs.use_standard_precision();
             std::cout << std::scientific << "dot_L  = " << dot_prod_BLAS << std::endl;   
-
+            
 
             g_vecCs.get(u1_d, u1_c);
             g_vecCs.get(u2_d, u2_c);

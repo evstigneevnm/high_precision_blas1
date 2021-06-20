@@ -31,15 +31,16 @@ int main(int argc, char const *argv[])
     using generate_vector_pair_t = generate_vector_pair<gpu_vector_operations_t, dot_exact_t, gpu_reduction_t, gpu_reduction_ogita_t>;
     using threaded_reduction_t = threaded_reduction<T, T_vec>;
 
-    if(argc != 7)
+    if(argc != 8)
     {
-        std::cout << argv[0] << " G o N ref C wh; where: " << std::endl;
+        std::cout << argv[0] << " G o N ref C wh p; where: " << std::endl;
         std::cout << "  'G' is the GPU PCI-bus number or -1 for selection;" << std::endl;
         std::cout << "  'o' is the type of operations type method (0-naive, 1-ogita);" << std::endl;
         std::cout << "  'N' is the vector size; " << std::endl;
         std::cout << "  'ref' is the switch to calculate reference solution (ref = 1/0); " << std::endl;
         std::cout << "  'C' is the condition number;" << std::endl;
-        std::cout << "  'wh' is the operation to be execution (0 - all (sum&dot), 1 - sum, 2 - dot)." << std::endl;        
+        std::cout << "  'wh' is the operation to be execution (0 - all (sum&dot), 1 - sum, 2 - dot);" << std::endl;        
+        std::cout << "  'p' is the high precision dot product (g - gpu, c - cpu)." << std::endl;        
         return 0;
     }
     int gpu_pci_id = atoi(argv[1]);
@@ -48,6 +49,7 @@ int main(int argc, char const *argv[])
     bool use_ref = atoi(argv[4]);
     T cond_number_ = atof(argv[5]);
     int operation_type = atoi(argv[6]);
+    char host_or_device = argv[7][0];
 
     init_cuda(gpu_pci_id);
 
@@ -162,8 +164,18 @@ int main(int argc, char const *argv[])
         if(use_ref)
         {
 
+            if(host_or_device == 'g')
+            {
+                dp_ref.use_gpu(vec_size);
+            }
+            else if(host_or_device == 'c')
+            {
+                dp_ref.use_cpu();
+            }
             dp_ref.set_arrays(vec_size, u1_c, u2_c);
             
+            
+
             start_ch = std::chrono::steady_clock::now();
             T dot_prod_2 = c_vecs.scalar_prod(u1_c, u2_c);
             finish_ch = std::chrono::steady_clock::now();
@@ -171,11 +183,15 @@ int main(int argc, char const *argv[])
             printf("dot_C = %.24le, time_wall = %lf ms\n", double(dot_prod_2), double(elapsed_mseconds) );
             
             T ref_exact = dp_ref.dot_exact();
-            T error_dot_L = dp_ref.get_error_T(dot_prod_1);
-            T error_dot_G = dp_ref.get_error_T(dot_prod_3);
-            T error_dot_C = dp_ref.get_error_T(dot_prod_2);
-            T error_dot_C_th = dp_ref.get_error_T(dot_prod_C_th);
-            T error_dot_G_ogita = dp_ref.get_error_T(dot_prod_ogita_G);
+            // T ref_exact_gpu = dp_ref.dot_exact();
+            // dp_ref.use_cpu();
+            // T ref_exact = dp_ref.dot_exact();
+            // std::cout << std::scientific << "diff: " << ref_exact_gpu - ref_exact << std::endl;
+            T error_dot_L = dp_ref.get_error_relative(dot_prod_1);
+            T error_dot_G = dp_ref.get_error_relative(dot_prod_3);
+            T error_dot_C = dp_ref.get_error_relative(dot_prod_2);
+            T error_dot_C_th = dp_ref.get_error_relative(dot_prod_C_th);
+            T error_dot_G_ogita = dp_ref.get_error_relative(dot_prod_ogita_G);
             
 
             printf("ref   = ");
@@ -222,7 +238,7 @@ int main(int argc, char const *argv[])
         printf("d_sum  = %.24le \n", std::abs<T>(sum_ogita_G - sum_G) );
 
         start_ch = std::chrono::steady_clock::now();
-        threaded_reduce.use_normal_prec();
+        threaded_reduce.use_standard_precision();
         T sum_C_th = threaded_reduce.sum(u2_c);
         finish_ch = std::chrono::steady_clock::now();
         elapsed_mseconds = std::chrono::duration<double, std::milli>(finish_ch - start_ch).count();
@@ -237,7 +253,7 @@ int main(int argc, char const *argv[])
             s_ref.set_array(vec_size, u2_c);
             
             start_ch = std::chrono::steady_clock::now();
-            threaded_reduce.use_high_prec();
+            threaded_reduce.use_high_precision();
             T sum_ogita_C_th = threaded_reduce.sum(u2_c);
             finish_ch = std::chrono::steady_clock::now();
             elapsed_mseconds = std::chrono::duration<double, std::milli>(finish_ch - start_ch).count();
