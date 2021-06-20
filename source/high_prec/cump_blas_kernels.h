@@ -29,10 +29,15 @@ public:
     void sum(const cumpf_array_t& x_device, cumpf_array_t& res_device);
 
 
+    float get_execution_time_milliseconds()
+    {
+        return(milliseconds);
+    }
+
 private:
     size_t sz;
     unsigned int prec;
-
+    float milliseconds = 0;
     void get_blocks_threads_shmem(int n, int maxBlocks, int &blocks, int &threads, int &sdataSize);
     unsigned int nextPow2(unsigned int x)
     {
@@ -44,7 +49,7 @@ private:
         x |= x >> 16;
         return ++x;
     }
-    
+
 };
 
 

@@ -381,10 +381,11 @@ void cump_blas_kernels<BLOCK_SIZE, threads_r>::dot(const cumpf_array_t& x, const
 
 
     const int maxBlocks = std::pow<int>(2,31) - 1;// sm_30 and greater.
+    
+    cudaEvent_t start, stop;
 
     int threads = 0, blocks = 0, sdataSize=0;
     get_blocks_threads_shmem(sz, maxBlocks, blocks, threads, sdataSize);
-
     cumpf_array_t dtemp;
     cumpf_array_t dvecprod;
     cumpf_array_t dblock_result;
@@ -397,8 +398,13 @@ void cump_blas_kernels<BLOCK_SIZE, threads_r>::dot(const cumpf_array_t& x, const
 
     //Launch
     kernels_from_mpblas::cump_reset_array<<<blocks_x, BLOCK_SIZE>>>(sz, dtemp);
-    kernels_from_mpblas::cump_vec_mul_kernel<<<blocks_x, BLOCK_SIZE>>>(sz, dvecprod, x, y);
     
+
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+
+    kernels_from_mpblas::cump_vec_mul_kernel<<<blocks_x, BLOCK_SIZE>>>(sz, dvecprod, x, y);
+    cudaEventRecord(start); 
     kernels_from_mpblas::cump_sum_kernel1<<<blocks, threads>>>(sz, dblock_result, dvecprod, dtemp);
 
     int s=blocks;
@@ -407,7 +413,7 @@ void cump_blas_kernels<BLOCK_SIZE, threads_r>::dot(const cumpf_array_t& x, const
         get_blocks_threads_shmem(s, maxBlocks, blocks, threads, sdataSize);
         dim3 dimBlock(threads, 1, 1);
         dim3 dimGrid(blocks, 1, 1);
-        kernels_from_mpblas::cump_reset_array<<<dimGrid, dimBlock>>>(sz, dtemp);
+        kernels_from_mpblas::cump_reset_array<<<dimGrid, dimBlock>>>(s, dtemp);
         kernels_from_mpblas::cump_sum_kernel1<<<dimGrid, dimBlock>>>(s, dblock_result, dblock_result, dtemp);
         s = (s + (threads*2-1)) / (threads*2);
     }
@@ -416,8 +422,11 @@ void cump_blas_kernels<BLOCK_SIZE, threads_r>::dot(const cumpf_array_t& x, const
     {
         kernels_from_mpblas::cump_sum_kernel2<<<1, 1>>>(dblock_result, res);
     }
+    cudaDeviceSynchronize();
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+    cudaEventElapsedTime(&milliseconds, start, stop);
 
-    
     cumpf_array_clear(dblock_result);
     cumpf_array_clear(dvecprod);
     cumpf_array_clear(dtemp);

@@ -21,8 +21,8 @@ public:
     sz(sz_),
     prec(prec_)
     {
-        cumpf_set_default_prec (prec_);
-        cump_blas = new cump_blas_kernels<>(sz, prec_);
+        cumpf_set_default_prec (prec);
+        cump_blas = new cump_blas_kernels<>(sz, prec);
         X = new mpf_t[sz_];
         Y = new mpf_t[sz_];
         
@@ -55,6 +55,10 @@ public:
             delete [] Y;
         }
 
+        if(cump_blas!=nullptr)
+        {
+            delete cump_blas;
+        }
     }
     
     void set_arrays(T_vec& input_array_1_, T_vec& input_array_2_)
@@ -94,6 +98,11 @@ public:
         cumpf_array_clear (X_);
         cumpf_array_clear (Y_);
 
+    }
+
+    float get_execution_time_milliseconds()
+    {
+        return( cump_blas->get_execution_time_milliseconds() );
     }
 
 private:

@@ -10,6 +10,7 @@
 #include <common/cpu_vector_operations.h>
 #include <common/threaded_reduction.h>
 #include <high_prec/dot_product_gmp.hpp>
+#include <high_prec/dot_product_cump.hpp>
 #include <high_prec/sum_gmp.hpp>
 #include <common/gpu_reduction.h>
 #include <common/testing/gpu_reduction_ogita.h>
@@ -30,6 +31,7 @@ int main(int argc, char const *argv[])
     using sum_exact_t = sum_gmp<T, T_vec>;
     using generate_vector_pair_t = generate_vector_pair<gpu_vector_operations_t, dot_exact_t, gpu_reduction_t, gpu_reduction_ogita_t>;
     using threaded_reduction_t = threaded_reduction<T, T_vec>;
+    using dot_product_cump_t = dot_product_cump<T, T_vec>;
 
     if(argc != 8)
     {
@@ -59,7 +61,8 @@ int main(int argc, char const *argv[])
     gpu_reduction_t reduction(vec_size);
     gpu_reduction_ogita_t reduciton_ogita(vec_size);
     threaded_reduction_t threaded_reduce(vec_size, -1, dot_prod_type);
-
+    //testing a double, but it has minimum 64bits encoding.
+    dot_product_cump_t reduction_cump(vec_size, 53); 
 
     unsigned int exact_bits = 1024;
     dot_exact_t dp_ref(exact_bits);
@@ -116,6 +119,11 @@ int main(int argc, char const *argv[])
     if(operation_type == 0 || operation_type == 2)
     {
         printf("========================= dot =========================\n");    
+        
+        reduction_cump.set_arrays(u1_c, u2_c);
+        T dot_cump = reduction_cump.dot();
+        float cump_time = reduction_cump.get_execution_time_milliseconds();
+        printf("dot_CU= %.24le, time = %f ms\n", double(dot_cump), cump_time);
         cudaEvent_t start, stop;
         cudaEventCreate(&start);
         cudaEventCreate(&stop);
@@ -161,6 +169,7 @@ int main(int argc, char const *argv[])
         printf("dot_OG= %.24le, time_wall = %lf ms\n", double(dot_prod_ogita_G), elapsed_mseconds);
         // g_vecs.use_standard_precision();
 
+
         if(use_ref)
         {
 
@@ -173,7 +182,6 @@ int main(int argc, char const *argv[])
                 dp_ref.use_cpu();
             }
             dp_ref.set_arrays(vec_size, u1_c, u2_c);
-            
             
 
             start_ch = std::chrono::steady_clock::now();
@@ -192,13 +200,14 @@ int main(int argc, char const *argv[])
             T error_dot_C = dp_ref.get_error_relative(dot_prod_2);
             T error_dot_C_th = dp_ref.get_error_relative(dot_prod_C_th);
             T error_dot_G_ogita = dp_ref.get_error_relative(dot_prod_ogita_G);
+            T error_dot_CUMP = dp_ref.get_error_relative(dot_cump);
             
 
             printf("ref   = ");
             dp_ref.print_res();       
             printf("ref   = %.24le\n", double(ref_exact)); 
             printf("mantisa: \033[0;31mX.123456789123456789\033[0m\n");
-            printf("err_L = %.24le; err_G = %.24le; err_Ct = %.24le; err_C = %.24le; err_G_ogita = %.24le \n", double(error_dot_L), double(error_dot_G), double(error_dot_C_th), double(error_dot_C), double(error_dot_G_ogita) );
+            printf("err_L = %.24le; err_G = %.24le; err_Ct = %.24le; err_C = %.24le; err_G_ogita = %.24le; err_CUMP = %.24le \n", double(error_dot_L), double(error_dot_G), double(error_dot_C_th), double(error_dot_C), double(error_dot_G_ogita), double(error_dot_CUMP) );
         }
     }
     if(operation_type == 0 || operation_type == 1)

@@ -16,6 +16,7 @@
             "-I/usr/local/cuda/include",
             "-I/usr/local/inlcude",
 	    "-I/opt/gmp/include",
+	    "-I/opt/cump/include",
             "-I$project_base_path/source",
 			"-DTYPE=double",
 	    "-I$project_base_path"
