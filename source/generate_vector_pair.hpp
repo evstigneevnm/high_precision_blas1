@@ -11,15 +11,14 @@
 
 
 /**
- * @brief      This class describes a generator that returns two vector pairs with the prescribed condition number.
+ * @brief      This class is a generateor of a real vector pair with desired condition number.
  *
- * @tparam     VectorOperations      { class that implements vector operations }
- * @tparam     ExactDot              { class that implement exact dot product }
- * @tparam     ReductionClass        { calss that implements reduction }
- * @tparam     ReductionClassDouble  { class that implements reduction of the double precision}
- * @tparam     BLOCK_SIZE            { optional parameter that presents size of the block for GPUs }
+ * @tparam     VectorOperations            { real vector operations in base type f.p. format}
+ * @tparam     VectorOperationsDouble      { real vector operations in DOUBLE format}
+ * @tparam     ExactDotR                   { exact dot product of real vectors }
+ * @tparam     BLOCK_SIZE                  { GPU block size }
  */
-template<class VectorOperations, class ExactDot, class ReductionClass, class ReductionClassDouble, int BLOCK_SIZE = 1024>
+template<class VectorOperations, class VectorOperationsDouble, class ExactDot, int BLOCK_SIZE = 1024>
 class generate_vector_pair
 {
 private:
@@ -36,16 +35,15 @@ private:
 
 
 public:
-    generate_vector_pair(VectorOperations* vec_ops_, ExactDot* exact_dot_, ReductionClass* reduction_, ReductionClassDouble* reduction_double_):
+    generate_vector_pair(VectorOperations* vec_ops_, VectorOperationsDouble* vec_ops_double_, ExactDot* exact_dot_):
     vec_ops(vec_ops_),
-    exact_dot(exact_dot_),
-    reduction(reduction_),
-    reduction_double(reduction_double_)
+    vec_ops_double(vec_ops_double_),
+    exact_dot(exact_dot_)
     {
 
         sz = vec_ops->get_vector_size();
-        d1_c = new T[sz];
-        d2_c = new T[sz];
+        d1_c = new double[sz];
+        d2_c = new double[sz];
         vec_helper = new vec_helper_t(sz);
         rand_mantisa_d = device_allocate<T>(sz);
         rand_exponent_d = device_allocate<T>(sz);
@@ -85,19 +83,20 @@ public:
         vec_ops->stop_use_vector(x2_a_); vec_ops->free_vector(x2_a_);   
     }
 
-    void use_exact_dot_cond()
+    void dot_exact()
     {
         use_exact_dot = 1;
     }
 
-    void use_exact_dot_cond_cuda()
+    void dot_exact_cuda()
     {
-        use_exact_dot = 2;
+        use_exact_dot = 2;        
     }
 
     T generate(T_vec& x_, T_vec& y_, T condition_number_, int use_exact_dot_cuda_ = 0)
     {
         T condition_estimate = 0.0;
+        do
         {
             T b = std::log2(condition_number_);
             // we take the last X elements or a half at most
@@ -133,11 +132,16 @@ public:
             device_2_host_cpy<T>(x_part_c, &x_[sz - N_fix_part], N_fix_part);
             T_vec y_part_c = new T[N_fix_part];
             device_2_host_cpy<T>(y_part_c, &rand_mantisa_d[sz - N_fix_part], N_fix_part);
-
+            
+            vec_helper->convert_vector_T_to_double(x_, x1_double_a_);
+            vec_helper->convert_vector_T_to_double(y_, x2_double_a_);            
+            T dot_xy = static_cast<T>(dot(x1_double_a_, x2_double_a_)); //local dot product!!!
             for( int j = 0; j<N_fix_part; j++)
             {
-                
-                T dot_xy = dot(x_, y_); //local dot product!!!
+                //local dot product update
+                vec_helper->convert_vector_T_to_double(x_, x1_double_a_);
+                vec_helper->convert_vector_T_to_double(y_, x2_double_a_);
+                dot_xy = static_cast<T>( dot_update(sz - N_fix_part, sz, x1_double_a_, x2_double_a_) );
                 T y_l = (y_part_c[j]*std::pow<T>(T(2.0), exp_fixed[j]) - dot_xy)/x_part_c[j];
                 vec_ops->set_value_at_point(y_l, sz - N_fix_part + j, y_);
             }
@@ -159,13 +163,12 @@ public:
 private:
 
     VectorOperations* vec_ops;
+    VectorOperationsDouble* vec_ops_double;
     ExactDot* exact_dot;
-    ReductionClass* reduction;
-    ReductionClassDouble* reduction_double;
     size_t sz;
     char use_exact_dot = 0;
-    T_vec d1_c = nullptr;
-    T_vec d2_c = nullptr;
+    double* d1_c = nullptr;
+    double* d2_c = nullptr;
 
     T_vec rand_exponent_d = nullptr;
     T_vec rand_mantisa_d = nullptr;
@@ -179,57 +182,83 @@ private:
         
         vec_helper->convert_vector_T_to_double(x1_, x1_double_a_);
         vec_helper->convert_vector_T_to_double(x2_, x2_double_a_);
-        double x1x2 = std::abs( reduction_double->dot(x1_double_a_, x2_double_a_) );
+        double x1x2 = std::abs( dot(x1_double_a_, x2_double_a_) );
         vec_helper->return_abs_double_vec_inplace(x1_double_a_);
         vec_helper->return_abs_double_vec_inplace(x2_double_a_);
-        double ax1aax2a = reduction_double->dot(x1_double_a_, x2_double_a_);
+        double ax1aax2a = dot(x1_double_a_, x2_double_a_);
         return( T(ax1aax2a/x1x2) );
     }
 
-    T estimate_condition_blas(T_vec x1_, T_vec x2_)
+
+    inline T dot(double* d1, double* d2)
     {
-        
-        T x1x2 = std::abs( vec_ops->scalar_prod(x1_, x2_) );
-        vec_helper->return_abs_vec(x1_, x1_a_);
-        vec_helper->return_abs_vec(x2_, x2_a_);
-        T ax1aax2a = vec_ops->scalar_prod(x1_a_, x2_a_);
-        return(ax1aax2a/x1x2);
+        T res = 0;
+        if(use_exact_dot == 0)
+        {
+            res = dot_reduction(d1, d2);
+        }
+        else
+        {
+            res = dot_exact(d1, d2);
+        }
+        return( res );
     }
 
-    inline T dot(T_vec d1, T_vec d2)
+    inline double dot_reduction(double* d1, double* d2)
     {
-        return( dot_blas(d1, d2) );
-    }
-    inline T dot_reduction(T_vec d1, T_vec d2)
-    {
-        return( vec_ops->scalar_prod(d1, d2) );
-    }
-
-    inline T dot_blas(T_vec d1, T_vec d2)
-    {
-        return( reduction->dot(d1, d2) );
+        vec_ops_double->use_high_precision();
+        double res = vec_ops_double->scalar_prod(d1, d2);
+        vec_ops_double->use_standard_precision();
+        return( res );
     }
 
-    T dot_exact(T_vec d1, T_vec d2)
+
+    inline double dot_exact(double* d1, double* d2)
     {
         if(use_exact_dot == 1)
         {
-            exact_dot->set_arrays(sz, d1, d2);
+            vec_ops_double->get(d1, d1_c);
+            vec_ops_double->get(d2, d2_c);            
+            exact_dot->use_cpu();
+            exact_dot->set_arrays(sz, d1_c, d2_c);
             return( exact_dot->dot_exact() );
         }
         else if(use_exact_dot == 2)
         {
-            vec_ops->get(d1, d1_c);
-            vec_ops->get(d2, d2_c);
+            vec_ops_double->get(d1, d1_c);
+            vec_ops_double->get(d2, d2_c);
+            exact_dot->use_gpu(sz);            
             exact_dot->set_arrays(sz, d1_c, d2_c);
             return( exact_dot->dot_exact() );            
         }
         else
         {
-            return T(0.0);
+            return double(0.0);
         }
     }
 
+    inline double dot_update(size_t from_, size_t to_, double* d1, double* d2)
+    {
+       
+        T res = 0;
+        if(use_exact_dot == 0)
+        {
+            res = dot_reduction(d1, d2);
+        }
+        else if(use_exact_dot == 1)
+        {
+            res = dot_exact(d1, d2); 
+        }
+        else if(use_exact_dot == 2)
+        {
+            vec_ops_double->get(d1, d1_c);
+            vec_ops_double->get(d2, d2_c);
+            exact_dot->use_gpu(sz);
+            exact_dot->update_arrays(from_, to_, d1_c, d2_c);
+            res = exact_dot->dot_exact();
+        }
+        return( res );
+    }
 
 
 };

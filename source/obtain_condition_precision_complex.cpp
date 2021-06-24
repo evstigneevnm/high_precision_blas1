@@ -69,25 +69,27 @@ int main(int argc, char const *argv[])
     using gpu_vector_operationsC_t = gpu_vector_operations<TC>;
     using cpu_vector_operationsC_t = cpu_vector_operations<TC>;
     using gpu_vector_operations_t = gpu_vector_operations<T>;
+    using gpu_vector_operations_double_t = gpu_vector_operations<double>;
     using cpu_vector_operations_t = cpu_vector_operations<T>;
     using T_vec = gpu_vector_operations_t::vector_type;
     using TC_vec = gpu_vector_operationsC_t::vector_type;
 
     using dot_exact_t = dot_product_gmp<double, double*>;
     using dot_exact_complex_t = dot_product_gmp_complex<T, TC_vec>;
-    using generate_vector_pair_t = generate_vector_pair_complex<gpu_vector_operationsC_t,gpu_vector_operations_t, dot_exact_t>;
+    using generate_vector_pair_t = generate_vector_pair_complex<gpu_vector_operationsC_t,gpu_vector_operations_t, gpu_vector_operations_double_t, dot_exact_t>;
     using threaded_reduction_t = threaded_reduction<TC, TC_vec>;
     using error_bounds_t = error_bounds<T>;    
 
 
-    if(argc != 6)
+    if(argc != 7)
     {
-        std::cout << argv[0] << " G N C dC S; where: " << std::endl;
+        std::cout << argv[0] << " G N C dC S host; where: " << std::endl;
         std::cout << "  'G' is the GPU PCI-bus number or -1 for selection; " << std::endl;
         std::cout << "  'N' is the vector size; " << std::endl;
         std::cout << "  'C' is the maximum condition number; " << std::endl;
         std::cout << "  'dC' is the condition number multiplication step size; " << std::endl;
         std::cout << "  'S' is the number of executions on each step. " << std::endl;
+        std::cout << "  'host' is the char that sets the usage of the reference on GPU (g), CPU (c) or lower order compensation estimate (o). " << std::endl;        
         return 0;
     }
     int gpu_pci_id = atoi(argv[1]);
@@ -95,6 +97,7 @@ int main(int argc, char const *argv[])
     T cond_number_max = atof(argv[3]);
     T cond_step_ = atof(argv[4]);
     int executions_step = atof(argv[5]);
+    char exact_host =argv[6][0];
     std::string type_name = return_type_name<TC>( TC(1.0,1.0) );
     init_cuda(gpu_pci_id);
     int dot_prod_type_initial = 0;
@@ -108,6 +111,8 @@ int main(int argc, char const *argv[])
     cpu_vector_operationsC_t c_vecCs(vec_size, dot_prod_type_initial);
     gpu_vector_operations_t g_vecs(vec_size, CUBLAS_ref);
     cpu_vector_operations_t c_vecs(vec_size, dot_prod_type_initial);
+    gpu_vector_operations_double_t g_vecs_double(vec_size, CUBLAS_ref);
+
 
     threaded_reduction_t threaded_reduce(vec_size, -1, dot_prod_type_initial);
     error_bounds_t err_bnd;
@@ -121,9 +126,16 @@ int main(int argc, char const *argv[])
     c_vecCs.init_vector(u1_c); c_vecCs.init_vector(u2_c); 
     c_vecCs.start_use_vector(u1_c); c_vecCs.start_use_vector(u2_c);
     printf("using vectors of size = %le\n", double(vec_size) );
-    generate_vector_pair_t generator(&g_vecCs, &g_vecs, &dp_ref);
+    generate_vector_pair_t generator(&g_vecCs, &g_vecs, &g_vecs_double, &dp_ref);
 
-    generator.dot_exact();  
+    if(exact_host == 'g')
+    {
+        generator.dot_exact_cuda();
+    }
+    else if (exact_host == 'c')
+    {
+        generator.dot_exact();
+    } 
 
     T cond_number = T(1.0);
 

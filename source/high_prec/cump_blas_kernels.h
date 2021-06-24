@@ -4,6 +4,8 @@
 
 #include <cstdint>
 #include <cump.h>
+#include <vector>
+#include <iostream>
 
 template<int BLOCK_SIZE = 1024, int threads_r = 64>
 class cump_blas_kernels
@@ -33,11 +35,24 @@ public:
     {
         return(milliseconds);
     }
+    
+    std::vector<float> get_repeated_execution_time_milliseconds()
+    {
+        return wall_time;
+    }
+
+    void use_benchmark(int repeats_)
+    {
+        repeats = repeats_;
+        wall_time.reserve(repeats);
+    }
 
 private:
     size_t sz;
     unsigned int prec;
+    std::vector<float> wall_time;
     float milliseconds = 0;
+    int repeats = 1;
     void get_blocks_threads_shmem(int n, int maxBlocks, int &blocks, int &threads, int &sdataSize);
     unsigned int nextPow2(unsigned int x)
     {

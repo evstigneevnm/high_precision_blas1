@@ -14,12 +14,13 @@
 /**
  * @brief      This class is a generateor of a complex vector pair with desired condition number.
  *
- * @tparam     VectorOperations      { complex vector operations }
- * @tparam     VectorOperationsR     { real vector operations for expoental generation }
- * @tparam     ExactDotR             { execat dot product of REAL vectors }
- * @tparam     BLOCK_SIZE            { GPU block size }
+ * @tparam     VectorOperations        { complex vector operations }
+ * @tparam     VectorOperationsR       { real vector operations in base type }
+ * @tparam     VectorOperationsDoubleR { real vector operations in DOUBLE f.p. }
+ * @tparam     ExactDotR               { exact dot product of REAL vectors }
+ * @tparam     BLOCK_SIZE              { GPU block size }
  */
-template<class VectorOperations, class VectorOperationsR, class ExactDotR, int BLOCK_SIZE = 1024>
+template<class VectorOperations, class VectorOperationsR, class VectorOperationsDoubleR, class ExactDotR, int BLOCK_SIZE = 1024>
 class generate_vector_pair_complex
 {
 private:
@@ -45,9 +46,10 @@ private:
     double* r1_c = nullptr;
     double* r2_c = nullptr;
 public:
-    generate_vector_pair_complex(VectorOperations* vec_ops_, VectorOperationsR* vec_opsR_, ExactDotR* exact_dot_):
+    generate_vector_pair_complex(VectorOperations* vec_ops_, VectorOperationsR* vec_opsR_, VectorOperationsDoubleR* vec_ops_double_R_, ExactDotR* exact_dot_):
     vec_ops(vec_ops_),
     vec_opsR(vec_opsR_),
+    vec_ops_double_R(vec_ops_double_R_),
     exact_dot(exact_dot_)
     {
         use_exact_dot = 0;
@@ -108,7 +110,11 @@ public:
     {
         use_exact_dot = 1;
     }
-
+    void dot_exact_cuda()
+    {
+        use_exact_dot = 2;        
+    }
+    
 
     std::pair<TR,TR> generate_pure_im(T_vec& x_, T_vec& y_, TR condition_number_, TR_vec& xi_, TR_vec& yi_, std::string part_of_dot_product = "IR", int use_exact_dot_cuda_ = 0)
     {
@@ -340,6 +346,7 @@ public:
         T_vec x_part_c = new T[Y];
         TR_vec exp_fixed = new TR[Y];
         T_vec y_part_c = new T[Y];
+        bool repeat = true;
         do{
             TR b = std::log2(condition_number_);
             // we take the last X elements or a half at most
@@ -406,9 +413,22 @@ public:
 
             condition_estimate = estimate_condition_reduction(x_, y_);
 
+            bool is_finite1 = isfinite(condition_estimate.first);
+            bool is_finite2 = isfinite(condition_estimate.second);
+            bool size1 = condition_estimate.first > 1.0*sz;
+            bool size2 = condition_estimate.second > 1.0*sz;
+            TR condition_estimate_component = condition_estimate.first;// - condition_number_;
+            if(gen_re_or_im == 1)
+            {
+                condition_estimate_component = condition_estimate.second;// - condition_number_;
+            }
 
+            bool failed = ((std::abs<TR>(std::abs(std::log(condition_number_) - std::log(condition_estimate_component))))>30.0);
+            repeat = (!(is_finite1||is_finite2))||failed;
+
+            // std::cout << condition_number_ << " " << condition_estimate_component << " " << std::abs(std::log(condition_number_) - std::log(condition_estimate_component)) << std::endl;
         }
-        while(!(isfinite(condition_estimate.first)||isfinite(condition_estimate.second)) );
+        while( repeat );
         
         delete [] exp_fixed;
         delete [] y_part_c;
@@ -428,6 +448,7 @@ private:
 
     VectorOperations* vec_ops;
     VectorOperationsR* vec_opsR;
+    VectorOperationsDoubleR* vec_ops_double_R;
     ExactDotR* exact_dot;
 
     size_t sz;
@@ -478,7 +499,10 @@ private:
         TR RI = dot_real(x1_r, x2_i);
         TR IR = dot_real(x1_i, x2_r);
 
-        return( T(RR+II, RI-IR) );
+        TR dot_real = exact_dot->sum_two(RR, II);
+        TR dot_imag = exact_dot->sum_two(RI,-IR);
+
+        return( T(dot_real, dot_imag) );
     }
 
 
@@ -496,9 +520,9 @@ private:
         }
         else
         {
-            // vec_opsR->use_high_precision();
-            // res = vec_opsR->scalar_prod(d1, d2);
-            // vec_opsR->use_standard_precision();
+            vec_ops_double_R->use_high_precision();
+            res = static_cast<TR>( vec_ops_double_R->scalar_prod(d1, d2) );
+            vec_ops_double_R->use_standard_precision();
         }
         return(res);
     }

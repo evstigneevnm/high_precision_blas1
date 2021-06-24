@@ -51,25 +51,27 @@ int main(int argc, char const *argv[])
     using complex = thrust::complex<T>;
     using gpu_vector_operations_t = gpu_vector_operations<T>;
     using cpu_vector_operations_t = cpu_vector_operations<T>;
+    using gpu_vector_operations_double_t = gpu_vector_operations<double>;    
     using T_vec = gpu_vector_operations_t::vector_type;
     using gpu_reduction_t = gpu_reduction<T, T_vec>;
     using gpu_reduction_ogita_t = gpu_reduction_ogita<T, T_vec>; 
-    using gpu_reduction_ogita_double_t = gpu_reduction_ogita<double, double*>; 
     using min_max_t = gpu_reduction_t::min_max_t;
     using dot_exact_t = dot_product_gmp<T, T_vec>;
-    using generate_vector_pair_t = generate_vector_pair<gpu_vector_operations_t, dot_exact_t, gpu_reduction_ogita_t, gpu_reduction_ogita_double_t>;
+    using dot_exact_double_t = dot_product_gmp<double, double*>;
+    using generate_vector_pair_t = generate_vector_pair<gpu_vector_operations_t, gpu_vector_operations_double_t, dot_exact_double_t>;
     using threaded_reduction_t = threaded_reduction<T, T_vec>;
     using error_bounds_t = error_bounds<T>;    
 
 
-    if(argc != 6)
+    if(argc != 7)
     {
-        std::cout << argv[0] << " G N C dC S; where: " << std::endl;
+        std::cout << argv[0] << " G N C dC S host; where: " << std::endl;
         std::cout << "  'G' is the GPU PCI-bus number or -1 for selection; " << std::endl;
         std::cout << "  'N' is the vector size; " << std::endl;
         std::cout << "  'C' is the maximum condition number; " << std::endl;
         std::cout << "  'dC' is the condition number multiplication step size; " << std::endl;
-        std::cout << "  'S' is the number of executions on each step. " << std::endl;
+        std::cout << "  'S' is the number of executions on each step; " << std::endl;
+        std::cout << "  'host' is the char that sets the usage of the reference on GPU (g), CPU (c) or lower order compensation estimate (o). " << std::endl;
         return 0;
     }
     int gpu_pci_id = atoi(argv[1]);
@@ -77,17 +79,20 @@ int main(int argc, char const *argv[])
     T cond_number_max = atof(argv[3]);
     T cond_step_ = atof(argv[4]);
     int executions_step = atof(argv[5]);
+    char exact_host =argv[6][0];
     std::string type_name = return_type_name<T>(cond_number_max);
     init_cuda(gpu_pci_id);
+    
     int dot_prod_type_initial = 0;
     dot_exact_t dp_ref(1024);
+    dot_exact_double_t dp_double(1024);
 
     cublas_wrap *CUBLAS_ref = new cublas_wrap(true);
     gpu_vector_operations_t g_vecs(vec_size, CUBLAS_ref);
     cpu_vector_operations_t c_vecs(vec_size, dot_prod_type_initial);
     gpu_reduction_t reduction(vec_size);
     gpu_reduction_ogita_t reduction_ogita(vec_size);
-    gpu_reduction_ogita_double_t reduction_ogita_double(vec_size);
+    gpu_vector_operations_double_t g_vecs_double(vec_size, CUBLAS_ref);
     threaded_reduction_t threaded_reduce(vec_size, -1, dot_prod_type_initial);
     error_bounds_t err_bnd;
 
@@ -100,8 +105,17 @@ int main(int argc, char const *argv[])
     c_vecs.init_vector(u1_c); c_vecs.init_vector(u2_c); 
     c_vecs.start_use_vector(u1_c); c_vecs.start_use_vector(u2_c);
     printf("using vectors of size = %le\n", double(vec_size) );
-    generate_vector_pair_t generator(&g_vecs, &dp_ref, &reduction_ogita, &reduction_ogita_double);
+    generate_vector_pair_t generator(&g_vecs, &g_vecs_double, &dp_double);
     
+    if(exact_host == 'g')
+    {
+        generator.dot_exact_cuda();
+    }
+    else if (exact_host == 'c')
+    {
+        generator.dot_exact();
+    }
+
 
     T cond_number = T(1.0);
 
@@ -109,9 +123,14 @@ int main(int argc, char const *argv[])
     std::ofstream f(f_name.c_str(), std::ofstream::out);
     if (!f) throw std::runtime_error("error while opening file for writing: " + f_name);
 
-    while( cond_number <= cond_number_max)
+    int count_above = executions_step;
+
+    while( count_above > 0)
     {
-        
+        if(cond_number > cond_number_max)
+        {
+            count_above--;
+        }        
         for(int le = 0; le < executions_step; le++)
         {
             T cond_estimste = generator.generate(u1_d, u2_d, cond_number);
@@ -163,23 +182,24 @@ int main(int argc, char const *argv[])
 
             long double simple_bound_ = normalize_error<long double>(err_bnd.dot.real.base.sequential);
             long double pairwise_bound_ = normalize_error<long double>(err_bnd.dot.real.base.pairwise_parallel );
-            long double parallel24_bound_ = normalize_error<long double>(err_bnd.dot.real.base.pairwise_parallel);
+            long double parallel24_bound_ = normalize_error<long double>(err_bnd.dot.real.base.block_parallel);
             
             long double ogita_bound_ = normalize_error<long double>(err_bnd.dot.real.compensated.sequential );
             long double pairwise_comp_bound_ = normalize_error<long double>(err_bnd.dot.real.compensated.pairwise_parallel );
-            long double parallel_comp_24_bound_ = normalize_error<long double>(err_bnd.dot.real.compensated.pairwise_parallel);
+            long double parallel_comp_24_bound_ = normalize_error<long double>(err_bnd.dot.real.compensated.block_parallel);
 
             // std::cout << "simple:" << simple_bound_ << " pairwise:" << pairwise_bound_ << " parallel24:" << parallel24_bound_ << " ogita:" << ogita_bound_ << " c_pairwise:" << pairwise_comp_bound_ << " c_parallel24:" << parallel_comp_24_bound_ << std::endl;
             
 
-            printf("ref   = %.24le \n", double(ref_exact));        
+            printf("ref    = %.24le \n", double(ref_exact));        
             printf("mantisa:\033[0;31mX.123456789123456789\033[0m \n");
-            printf("err_L = %.24le | %.24le \nerr_G = %.24le | %.24le \nerr_Ct = %.24le \nerr_C = %.24le | %.24le \n*err_CH= %.24le | %.24le \n*errCtH= %.24le | %.24le \n*err_GH= %.24le | %.24le\n", double(error_exact_L), double(pairwise_bound_), double(error_exact_G), double(pairwise_bound_), double(error_exact_C_th), double(error_exact_C), double(simple_bound_), double(error_exact_C_H), double(ogita_bound_), double(error_exact_C_th_H), double(parallel_comp_24_bound_), double(error_exact_ogita_G),  double(pairwise_comp_bound_));
+            printf("err_L  = %.24le | %.24le \nerr_G  = %.24le | %.24le \nerr_Ct = %.24le | %.24le\nerr_C  = %.24le | %.24le \n*err_CH= %.24le | %.24le \n*errCtH= %.24le | %.24le \n*err_GH= %.24le | %.24le\n", double(error_exact_L), double(pairwise_bound_), double(error_exact_G), double(pairwise_bound_), double(error_exact_C_th), double(parallel24_bound_), double(error_exact_C), double(simple_bound_), double(error_exact_C_H), double(ogita_bound_), double(error_exact_C_th_H), double(parallel_comp_24_bound_), double(error_exact_ogita_G),  double(pairwise_comp_bound_));
 
             if ( !(f << cond_estimste  << " " << normalize_error(error_exact_L) << " " << normalize_error(error_exact_G) << " " << normalize_error(error_exact_ogita_G) << " " << normalize_error(error_exact_C) << " " <<  normalize_error(error_exact_C_H) << " " << normalize_error(error_exact_C_th) << " " << normalize_error(error_exact_C_th_H) << " " << ogita_bound_ << " " << parallel24_bound_ << " " << parallel_comp_24_bound_ << " " << pairwise_bound_ << " " << pairwise_comp_bound_ << " "<< simple_bound_ << std::endl ) )
             {
                 throw std::runtime_error("error while writing to file: " + f_name);
             }
+            std::cout << std::endl;
 
         }
 

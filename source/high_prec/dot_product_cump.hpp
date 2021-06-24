@@ -73,6 +73,33 @@ public:
 
     }   
 
+    void update_arrays(size_t from_, size_t to_, T_vec& input_array_1_, T_vec& input_array_2_)
+    {
+        if(to_ <= sz)
+        {
+            #pragma omp parallel for
+            for(int j=from_; j<to_; j++)
+            {
+                mpf_set_d(X[j], static_cast<double>(input_array_1_[j]) );
+                mpf_set_d(Y[j], static_cast<double>(input_array_2_[j]) );            
+            }
+        }
+    }
+
+
+    T dot_benchmark(int repeats)
+    {
+        mpf_class s_m = mpf_class(0, prec);
+        cump_blas->use_benchmark(repeats);
+        dot_exact(s_m);
+        double dot_T = s_m.get_d();
+        return T(dot_T);
+    }
+    std::vector<float> get_repeated_execution_time_milliseconds()
+    {
+        return( cump_blas->get_repeated_execution_time_milliseconds() );
+    }
+
     T dot()
     {
         mpf_class s_m = mpf_class(0, prec);
@@ -87,7 +114,7 @@ public:
         cumpf_array_init_set_mpf (Y_, Y, sz);
         cumpf_array_t device_result;
         cumpf_array_init2(device_result, 1, prec);
-
+        
         cump_blas->dot(X_, Y_, device_result);
 
         mpf_t host_result;

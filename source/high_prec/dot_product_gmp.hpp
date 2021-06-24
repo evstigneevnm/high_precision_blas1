@@ -73,6 +73,14 @@ public:
 
     }
     
+    void update_arrays(size_t from_, size_t to_, T_vec& input_array_1_, T_vec& input_array_2_)
+    {
+        if(array_set&&gpu)
+        {
+            cump_class->update_arrays(from_, to_, input_array_1_, input_array_2_);
+        }
+    }
+
     T dot_exact()
     {
 
@@ -96,7 +104,12 @@ public:
         double dot_exact_T = s_m.get_d();
         return T(dot_exact_T);
     }
-    
+    T sum_two(const T one_, const T two)
+    {
+        mpf_class res_mpf = mpf_class(one_, exact_prec_bits)+ mpf_class(two, exact_prec_bits);
+        return( T( res_mpf.get_d() ) );
+    }
+
     void print_res()
     {
         std::cout << std::scientific << std::setprecision(128) << s_m << std::endl;
