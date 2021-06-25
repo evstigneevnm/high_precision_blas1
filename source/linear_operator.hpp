@@ -59,7 +59,7 @@ struct prec_operator
             // T xm = (i > 0  ? x[i-1] : T(0.f)),
               // xp = (i+1 < sz_ ? x[i+1] : T(0.f));
 
-            x[i] /= (a/h - (T(1.f)/re)*(-T(2.f))/(h*h));
+            x[i] /= (a/h - (T(1.0)/re)*(-T(2.0))/(h*h));
 
             // T num = 
             //x[i] /= ((T(1.f)/re_)*(-T(2.f))/(h_*h_));

@@ -7,8 +7,11 @@
 
 
 template <typename T>
-struct cpu_vector_operations
+class cpu_vector_operations
 {
+private:
+    int use_high_precision_dot_product;
+public:
     // typedef T  scalar_type;
     // typedef T* vector_type;
     using scalar_type = T;
@@ -21,11 +24,12 @@ struct cpu_vector_operations
 
     cpu_vector_operations(size_t sz, int use_high_precision_dot_product_ = 0, int use_threaded_dot_ = 0):
     sz_(sz),
-    use_threaded_dot(use_threaded_dot_)
+    use_threaded_dot(use_threaded_dot_),
+    use_high_precision_dot_product(use_high_precision_dot_product_)
     {
         location=false;
-        dot = new dot_product<T>(sz, use_high_precision_dot_product_);
-        threaded_dot = new threaded_reduction<scalar_type, vector_type>(sz_, use_threaded_dot_, use_high_precision_dot_product_);
+        dot = new dot_product<T>(sz, use_high_precision_dot_product);
+        threaded_dot = new threaded_reduction<scalar_type, vector_type>(sz_, use_threaded_dot_, use_high_precision_dot_product);
 
     }
     ~cpu_vector_operations()
@@ -82,17 +86,29 @@ struct cpu_vector_operations
         return true;
     }
     
-    void use_high_precision()
+    void use_high_precision() const
     {
         dot->use_high_prec();
         threaded_dot->use_high_precision();
     }
-    void use_standard_precision()
+    void use_standard_precision() const
     {
         dot->use_normal_prec();
         threaded_dot->use_standard_precision();
     }    
-
+    void use_default_precision() const
+    {
+        if(use_high_precision_dot_product == 0)
+        {
+            dot->use_normal_prec();
+            threaded_dot->use_standard_precision();
+        }
+        if(use_high_precision_dot_product == 1)
+        {
+            dot->use_high_prec();
+            threaded_dot->use_high_precision();
+        }
+    }
     scalar_type scalar_prod(const vector_type &x, const vector_type &y)const
     {
         // T res(0.f);
@@ -103,7 +119,7 @@ struct cpu_vector_operations
         // return res;
         scalar_type dot_res = T(0.0);
 
-        if (use_threaded_dot == 0)
+        if (use_threaded_dot <= 1)
         {
             dot_res = dot->dot(x, y);
         }
