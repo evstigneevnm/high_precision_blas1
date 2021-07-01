@@ -72,7 +72,7 @@ struct gpu_vector_operations
     using gpu_reduction_hp_t = gpu_reduction_ogita<T, vector_type>;
 
     //CONSTRUCTORS!
-    gpu_vector_operations(size_t sz_, cublas_wrap *cuBLAS_):
+    gpu_vector_operations(size_t sz_, cublas_wrap *cuBLAS_ = NULL):
     sz(sz_), 
     cuBLAS(cuBLAS_)
     {
@@ -186,7 +186,7 @@ struct gpu_vector_operations
         }
     }
     //sets a vector from a host vector. 
-    void set(vector_type& x_host_, vector_type& x_)
+    void set(const vector_type& x_host_, vector_type& x_)
     {
         if(x_!=nullptr)
         {

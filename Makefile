@@ -6,7 +6,7 @@ GPP = /usr/bin/g++
 GCC_kern = /usr/bin/g++
 SM_CUDA = sm_35
 CPP_STANDARD = c++14
-TARGET = -O3
+TARGET = -g
 
 NVCCFLAGS = -Wno-deprecated-gpu-targets $(TARGET) -arch=$(SM_CUDA) -std=$(CPP_STANDARD) -ccbin=$(GCC_kern)
 LIBFLAGS = --compiler-options -fPIC
@@ -21,6 +21,7 @@ LCUDA = -L/usr/local/cuda/lib64
 LBOOST = -L/home/noctum/boost_1_70/lib/
 LIBS1 = -lcublas -lcurand 
 LIBS2 = -lcufft -lcublas -lcurand 
+LIBCUSPARSE = -lcusparse
 LIBBOOST = -lboost_serialization
 LLAPACK = -L/opt/OpenBLAS/lib -lopenblas
 LGMP = -L/opt/gmp/lib -lgmp -lgmpxx
@@ -87,4 +88,8 @@ benchC_F:
 test_reduction:
 	$(NVCC) $(NVCCFLAGS) $(DTYPE) $(IPROJECT) $(ICUDA) $(IGMP) source/test_reduction.cpp $(LCUDA) $(LIBS1)  gpu_vec_kers.o cuda_reduction_kers.o cuda_reduction_ogita_kers.o  cump_kers.o -o test_reduction.bin
 
+mat_csr_D:
+	$(NVCC) $(DTYPE) $(NVCCFLAGS) $(IPROJECT) $(ICUDA) source/test_csr_matrix.cpp $(LCUDA) $(LIBS1) $(LIBCUSPARSE) gpu_vec_kers.o cuda_reduction_ogita_kers.o cuda_reduction_kers.o -o test_csr_matrix.bin
 
+mat_pointers_D:
+	$(NVCC) $(DTYPE) $(NVCCFLAGS) $(IPROJECT) $(ICUDA) source/test_csr_matrix_pointers.cu $(LCUDA) $(LIBS1) $(LIBCUSPARSE) -o test_csr_matrix_pointers.bin
