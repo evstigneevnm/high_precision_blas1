@@ -24,45 +24,44 @@ private:
     using T_vec = typename parent_t::T_vec;
     using I = typename gpu_vectors_ordinal<Ordinal>::scalar_type;
     using I_vec = typename gpu_vectors_ordinal<Ordinal>::vector_type;
-    // using cusparse_data_t = typename set_cusparse_type<T>::real;
 
 
-    cusparseIndexType_t cusparse_ordinal()
+    cusparseIndexType_t cusparse_ordinal()const
     {
         if((std::is_same<Ordinal, std::int32_t>::value)||(std::is_same<Ordinal, std::uint32_t>::value))
         {
-            // std::cout << "index 32\n";
+            
             return CUSPARSE_INDEX_32I;
         }
         if((std::is_same<Ordinal, std::int64_t>::value)||(std::is_same<Ordinal, std::uint64_t>::value))
         {
-            // std::cout << "index 64\n";
+            
             return CUSPARSE_INDEX_64I;
         }
         return CUSPARSE_INDEX_64I;
     }
         
 
-    cudaDataType cusparse_real()
+    cudaDataType cusparse_real()const
     {
         if(std::is_same<T, float>::value)
         {
-            // std::cout << "float\n";
+
             return CUDA_R_32F;
         }
         if(std::is_same<T, double>::value)
         {
-            // std::cout << "double\n";
+            
             return CUDA_R_64F;
         }
         if(std::is_same<T, thrust::complex<float> >::value)
         {
-            // std::cout << "complex float\n";
+            
             return CUDA_C_32F;
         }   
         if(std::is_same<T, thrust::complex<double> >::value)
         {
-            // std::cout << "complex double\n";
+            
             return CUDA_C_64F;
         } 
     }
@@ -119,10 +118,10 @@ public:
      * @param[in]  alpha_      basic type
      * @param[in]  x_          { basic type array }
      * @param[in]  beta_       basic type
-     * @param      y_          { basic type attay }
+     * @param      y_          { basic type array }
      * @param[in]  transpose_  true for transposed operation of A
      */
-    void axpy(const T& alpha_, const T_vec& x_, const T& beta_, T_vec& y_, bool transpose_ = false)
+    void axpy(const T& alpha_, const T_vec& x_, const T& beta_, T_vec& y_, bool transpose_ = false)const
     {
         cusparseDnVecDescr_t vecX, vecY;
         cusparseOperation_t is_transpose;

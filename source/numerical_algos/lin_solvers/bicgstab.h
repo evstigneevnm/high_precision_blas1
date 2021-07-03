@@ -18,6 +18,7 @@
 #define __SCFD_BICGSTAB_H__
 
 #include <cmath>
+#include <stdexcept>
 #include <numerical_algos/detail/vectors_arr_wrap_static.h>
 #include "detail/monitor_call_wrap.h"
 #include "iter_solver_base.h"
@@ -88,7 +89,7 @@ public:
         resid_recalc_freq_(0)
     {
         bufs.init();
-        int sz=vec_ops->sz_;
+        size_t sz=vec_ops->get_vector_size();
         some_vec=(scalar_type*)malloc(sizeof(scalar_type)*sz);
         if(some_vec==NULL)
             throw std::runtime_error("bicgstab: failed to allocate memory");;

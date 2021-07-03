@@ -150,15 +150,15 @@ struct gpu_vector_operations
     {
         
     }
-    size_t get_vector_size()
+    size_t get_vector_size() const
     {
         return sz;
     }
-    size_t get_l2_size()
+    size_t get_l2_size() const
     {
         return std::sqrt(Tsc(sz));
     }    
-    bool device_location()
+    bool device_location() const
     {
         return location;
     }
@@ -368,6 +368,7 @@ struct gpu_vector_operations
         {
             throw(std::runtime_error("high precision dot product with GPU-allocated result is not yet implemented."));
         }
+        else
         {
             cuBLAS->norm2<T>(sz, x, result);
         }
@@ -378,12 +379,28 @@ struct gpu_vector_operations
     Tsc normalize(vector_type& x)
     {
         Tsc norm;
-        cuBLAS->normalize<T>(sz, x, &norm);
+        if(use_high_precision_dot)
+        {
+            norm = gpu_reduction_hp->norm(x);
+            cuBLAS->scale<T>(sz, 1.0/norm, x);
+        }
+        else 
+        {
+            cuBLAS->normalize<T>(sz, x, &norm);
+        }
+        
         return norm;
     }
     void normalize(vector_type& x, Tsc *norm)
     {
-        cuBLAS->normalize<T>(sz, x, norm);
+        if(use_high_precision_dot)
+        {
+            throw(std::runtime_error("high precision dot product with GPU-allocated result is not yet implemented."));
+        }
+        else
+        {        
+            cuBLAS->normalize<T>(sz, x, norm);
+        }
     }
     void scale(const T alpha, vector_type& x) const
     {

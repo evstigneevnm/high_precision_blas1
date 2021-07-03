@@ -230,7 +230,7 @@ public:
             throw std::runtime_error("csr::matrix_market_reader::read_file: error while opening file");
         }
         read_banner(fin);
-        if(std::is_same<T, T_real>::value)
+        if(!std::is_same<T, T_real>::value)
         {
             throw std::runtime_error("csr::matrix_market_reader::read_file: real data type used for a complex matrix. This will be fixed later." );
         }        

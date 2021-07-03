@@ -90,6 +90,11 @@ test_reduction:
 
 mat_csr_D:
 	$(NVCC) $(DTYPE) $(NVCCFLAGS) $(IPROJECT) $(ICUDA) source/test_csr_matrix.cpp $(LCUDA) $(LIBS1) $(LIBCUSPARSE) gpu_vec_kers.o cuda_reduction_ogita_kers.o cuda_reduction_kers.o -o test_csr_matrix.bin
-
 mat_pointers_D:
 	$(NVCC) $(DTYPE) $(NVCCFLAGS) $(IPROJECT) $(ICUDA) source/test_csr_matrix_pointers.cu $(LCUDA) $(LIBS1) $(LIBCUSPARSE) -o test_csr_matrix_pointers.bin
+lin_solver_csr_D:
+	$(NVCC) $(DTYPE) $(NVCCFLAGS) $(IPROJECT) $(ICUDA) source/test_csr_linear_solver.cpp $(LCUDA) $(LIBS1) $(LIBCUSPARSE) gpu_vec_kers.o cuda_reduction_ogita_kers.o cuda_reduction_kers.o -o test_csr_linear_solver.bin
+lin_solver_csr_F:
+	$(NVCC) $(FTYPE) $(NVCCFLAGS) $(IPROJECT) $(ICUDA) source/test_csr_linear_solver.cpp $(LCUDA) $(LIBS1) $(LIBCUSPARSE) gpu_vec_kers.o cuda_reduction_ogita_kers.o cuda_reduction_kers.o -o test_csr_linear_solver.bin
+
+

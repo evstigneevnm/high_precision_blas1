@@ -10,7 +10,7 @@ int main(int argc, char const *argv[])
     using TC = thrust::complex<T>;
     using gpu_vector_operations_t = gpu_vector_operations<T>;
     using T_vec = gpu_vector_operations_t::vector_type;
-    using T_mat = csr::gpu_matrix<gpu_vector_operations_t, cublas_wrap>;
+    using T_mat_t = csr::gpu_matrix<gpu_vector_operations_t, cublas_wrap>;
     using mm_reader_t = csr::matrix_market_reader<T>;
 
     if(argc!=3)
@@ -25,11 +25,11 @@ int main(int argc, char const *argv[])
     init_cuda(gpu_pci_id);
 
     cublas_wrap cublas(true);
-    T_mat mat(&cublas);
+    T_mat_t mat(&cublas);
     // mat.init_set_from_file(file_name);
     mm_reader_t reader(true);
     reader.read_file(file_name);
-    reader.set_csr_matrix<T_mat>(&mat);
+    reader.set_csr_matrix<T_mat_t>(&mat);
     
     auto dims = mat.get_dim();
     int size_y = dims.rows;

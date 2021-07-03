@@ -408,7 +408,7 @@ public:
                         {
                             T c_norm = alpha;
                             int correction_iterations = 0;
-                            while(c_norm > 1.0e-10*std::sqrt(vec_ops_->sz_)) //iterative correction
+                            while(c_norm > 1.0e-10*std::sqrt(vec_ops_->get_vector_size())) //iterative correction
                             {
                                 correction_iterations++;
                                 T c = vec_ops_->scalar_prod(V[k], r); // H(k,i) = (V[k],V[i+1])
