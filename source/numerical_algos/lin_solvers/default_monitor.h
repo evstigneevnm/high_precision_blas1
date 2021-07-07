@@ -20,6 +20,7 @@
 #include <vector>
 #include <utils/logged_obj_base.h>
 #include <utils/log.h>
+#include <numerical_algos/lin_solvers/detail/complex_calls_wrap.h>
 #include <numerical_algos/detail/vectors_arr_wrap_static.h>
 
 namespace numerical_algos
@@ -37,13 +38,16 @@ public:
 
 private:
     typedef scalar_type                                         T;
+    
+    using T_real = typename detail::complex_base<T>::type;
+    
     typedef utils::logged_obj_base<Log>                         logged_obj_t;
-    typedef detail::vectors_arr_wrap_static<VectorOperations,1> buf_arr_t;
+    typedef numerical_algos::detail::vectors_arr_wrap_static<VectorOperations,1> buf_arr_t;
 
     const vector_operations_type &vec_ops_;
 
-    T           rel_tol_, abs_tol_;
-    T           rel_tol_save_;
+    T_real           rel_tol_, abs_tol_;
+    T_real           rel_tol_save_;
     int         max_iters_num_, min_iters_num_;
     int         max_iters_num_save_;
     bool        out_min_resid_norm_;
@@ -55,14 +59,14 @@ private:
     //is_valid_number is a flag, meaning whether current solution is a valid 
     //vector (without nans or infs)
     bool        is_valid_number_;
-    T           rhs_norm_;
-    T           resid_norm_;
+    T_real      rhs_norm_;
+    T_real      resid_norm_;
 
-    T           min_resid_norm_;
+    T_real      min_resid_norm_;
     buf_arr_t   buf_;
     vector_type &min_resid_norm_x_;
 
-    std::vector<std::pair<int,T> >  convergence_history_;
+    std::vector<std::pair<int,T_real> >  convergence_history_;
 public:
     default_monitor(const vector_operations_type &vec_ops, 
                     Log *log = NULL, int obj_log_lev = 0) : 
@@ -70,7 +74,7 @@ public:
         vec_ops_(vec_ops), buf_(&vec_ops),
         min_resid_norm_x_(buf_[0]) {}
 
-    void                    init(T rel_tol, T abs_tol = T(0.f),
+    void                    init(T_real rel_tol, T_real abs_tol = T_real(0.f),
                                  int max_iters_num = 100, int min_iters_num = 0, 
                                  bool out_min_resid_norm = false,
                                  bool save_convergence_history = false,
@@ -127,10 +131,10 @@ public:
         if (out_min_resid_norm_) buf_.stop_use_all();
     }
 
-    T                       rel_tol()const { return rel_tol_; }
-    T                       abs_tol()const { return abs_tol_; }
-    T                       rel_tol_base()const { return rhs_norm(); }
-    T                       tol()const { return abs_tol() + rel_tol()*rel_tol_base(); }
+    T_real                  rel_tol()const { return rel_tol_; }
+    T_real                  abs_tol()const { return abs_tol_; }
+    T_real                  rel_tol_base()const { return rhs_norm(); }
+    T_real                  tol()const { return abs_tol() + rel_tol()*rel_tol_base(); }
     int                     max_iters_num()const { return max_iters_num_; } 
     int                     min_iters_num()const { return min_iters_num_; }
     bool                    out_min_resid_norm()const { return out_min_resid_norm_; }
@@ -139,16 +143,16 @@ public:
 
     int                                     iters_performed()const { return iters_performed_; }
     bool                                    is_valid_number()const { return is_valid_number_; }
-    T                                       rhs_norm()const { return rhs_norm_; }
-    T                                       resid_norm()const { return resid_norm_; }
-    T                                       resid_norm_out()const 
+    T_real                                  rhs_norm()const { return rhs_norm_; }
+    T_real                                  resid_norm()const { return resid_norm_; }
+    T_real                                  resid_norm_out()const 
     { 
         if (!divide_out_norms_by_rel_base())
             return resid_norm(); 
         else
             return resid_norm()/rel_tol_base();
     }
-    T                                       tol_out()const 
+    T_real tol_out()const 
     { 
         if (!divide_out_norms_by_rel_base())
             return tol(); 
@@ -157,7 +161,7 @@ public:
     }
     const vector_type                       &min_resid_norm_x()const { return min_resid_norm_x_; }
 
-    const std::vector<std::pair<int,T> >    &convergence_history()const { return convergence_history_; }
+    const std::vector<std::pair<int,T_real> >    &convergence_history()const { return convergence_history_; }
 
     default_monitor                         &operator++() 
     {  
@@ -187,7 +191,7 @@ public:
 
         logged_obj_t::info_f("resid norm = %0.6e tol = %0.6e", resid_norm_out(), tol_out());
         if (save_convergence_history_) 
-            convergence_history_.push_back( std::pair<int,T>(iters_performed(), resid_norm_out()) );
+            convergence_history_.push_back( std::pair<int,T_real>(iters_performed(), resid_norm_out()) );
 
         if (out_min_resid_norm()) {
             if ((iters_performed() == 0)||(resid_norm() < min_resid_norm_)) {

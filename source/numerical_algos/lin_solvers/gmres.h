@@ -18,8 +18,10 @@
 #define __SCFD_GMRES_H__
 
 #include <stdexcept>
+#include <iostream>
 #include <cmath>
 #include <numerical_algos/detail/vectors_arr_wrap_static.h>
+#include <numerical_algos/lin_solvers/detail/complex_calls_wrap.h>
 #include "detail/monitor_call_wrap.h"
 #include "iter_solver_base.h"
 
@@ -109,9 +111,9 @@ private:
     // not L2 norm!
     // TODO: if T is complex, then we have a problem! Fix this!!!
     // For by vector_operations i have a type called ''norm_type''. Should we use it as a must???
-    T normalize_(T_vec &v, const T& sign_ = T(1.0))const
+    auto normalize_(T_vec &v, const T& sign_ = T(1.0))const
     {
-        T norm2 = vec_ops_->norm(v);
+        auto norm2 = vec_ops_->norm(v);
         vec_ops_->assign_mul(sign_/norm2, v, v);
         return norm2;
     }
@@ -221,16 +223,16 @@ private:
         //     cs = std::abs(dx) / norm;
         //     sn = alpha * conj_(dy) / norm;
         // }
-        else if(std::abs(dy) > std::abs(dx))
+        else if(detail::abs(dy) > detail::abs(dx))
         {
             T tmp = dx / dy;
-            sn = T(1.0) / std::sqrt(T(1.0) + tmp*tmp);
+            sn = T(1.0) / detail::sqrt(T(1.0) + tmp*tmp);
             cs = tmp*sn;
         } 
         else
         {   
             T tmp = dy / dx;
-            cs = T(1.0) / std::sqrt(T(1.0) + tmp*tmp);
+            cs = T(1.0) / detail::sqrt(T(1.0) + tmp*tmp);
             sn = tmp*cs;
         }    
     }
@@ -333,7 +335,7 @@ public:
         restart_ = (int)restart; 
         if(restart >= GMRESMaxBasisSize)
         {
-            throw(std::logic_error(std::string("gmres::set_restarts: basis size is greter than the provided template parameter.")));
+            throw(std::logic_error(std::string("gmres::set_restarts: basis size is greter than the provided template parameter = " + std::to_string(GMRESMaxBasisSize) )));
         }
         V.init(restart_+1); 
         try
@@ -387,7 +389,7 @@ public:
         {            
             do
             {
-                T beta = normalize_(r, T(1.0));
+                auto beta = normalize_(r, T(1.0));
                 vec_ops_->assign( r, V[0]);
                 zero_host_s_(); // s(:) = 0;
                 s[0] = beta;
@@ -406,13 +408,14 @@ public:
                         vec_ops_->add_mul(-alpha, V[k], r); // V(i+1) -= H(k, i) * V(k)
                         if(reorthogonalization_)
                         {
-                            T c_norm = alpha;
+                            auto c_norm = detail::norm_number(alpha);
                             int correction_iterations = 0;
                             while(c_norm > 1.0e-10*std::sqrt(vec_ops_->get_vector_size())) //iterative correction
                             {
+                                std::cout << "reothogonalization is on!" << std::endl;
                                 correction_iterations++;
                                 T c = vec_ops_->scalar_prod(V[k], r); // H(k,i) = (V[k],V[i+1])
-                                c_norm = std::abs(c);
+                                c_norm = detail::norm_number(alpha);
                                 vec_ops_->add_mul(-c, V[k], r);
                                 alpha += c;
                                 if(correction_iterations>10)
@@ -425,7 +428,7 @@ public:
                         H[k*restart_+i] = alpha;
 
                     }
-                    T h_ip = normalize_(r);
+                    auto h_ip = normalize_(r);
                     H[(i + 1)*restart_ + i] = h_ip;
                     vec_ops_->assign(r, V[i+1]);
                     
@@ -445,7 +448,7 @@ public:
                     //     calc_residual_(A, x, b, r);   
                     //     resid_estimate = vec_ops_->norm(r);
                     //     if(resid_estimate < monitor_.rel_tol())                   
-                    //         break;
+                            // break;
                     // }
 
                 } while( i + 1 < restart_);

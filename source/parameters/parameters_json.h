@@ -70,51 +70,109 @@ struct holder
     };
     struct linear_solver
     {
-        std::string name = "bicgstab";
-        unsigned int max_iteration = 100;
         double rel_tol = 1.0e-6;
         bool use_preconditioned_residual = true;
         bool use_real_residual = true;
-        unsigned int basis_size = 3;
-        bool save_convergence_history;
-        bool divide_out_norms_by_rel_base;    
-      
+        bool save_convergence_history = true;
+        bool divide_out_norms_by_rel_base = true;   
+        bool verbose = false;
+        struct bicgstabl_c
+        {
+            bool set = false;
+            unsigned int max_iteration = 100;
+            unsigned int basis_size = 3;
+            void plot_all()
+            {
+                if(set)
+                {
+                    std::cout << "||  bicgstabl " << std::endl;
+                    std::cout << "||  |    |==basis_size: " << basis_size << std::endl;
+                    std::cout << "||  |    |==max_iteration: " << max_iteration << std::endl;                    
+                }
+            }
+        };
+        struct bicgstab_c
+        {
+            bool set = false;
+            unsigned int max_iteration = 100;
+            void plot_all()
+            {
+                if(set)
+                {
+                    std::cout << "||  bicgstab " << std::endl;
+                    std::cout << "||  |    |==max_iteration: " << max_iteration << std::endl;                    
+                }
+            }
+        };
+        struct gmres_c
+        {
+            bool set = false;
+            unsigned int max_iteration = 100;
+            unsigned int restarts = 50;
+            bool reorthogonalization = false;
+
+            void plot_all()
+            {
+                if(set)
+                {
+                    std::cout << "||  gmres " << std::endl;
+                    std::cout << "||  |    |==restarts: " << restarts << std::endl;
+                    std::cout << "||  |    |==max_iteration: " << max_iteration << std::endl;                    
+                    std::cout << "||  |    |==reorthogonalization: " << __print_bool(reorthogonalization) << std::endl;
+                    if(max_iteration < restarts)
+                    {
+                        throw std::logic_error("gmres: maximum number of tterations cannot be smaller then the number of restarts (Krylov subspace basis size)");
+                    }
+                }
+            }
+        };        
+        bicgstab_c bicgstab;
+        bicgstabl_c bicgstabl;
+        gmres_c gmres;
         void plot_all()
         {
-            std::cout << "||  |==name: " << name << std::endl;
-            std::cout << "||  |==max_iteration: " << max_iteration << std::endl;
             std::cout << "||  |==rel_tol: " << rel_tol << std::endl;
             std::cout << "||  |==use_preconditioned_residual: " << __print_bool(use_preconditioned_residual) << std::endl;
             std::cout << "||  |==use_real_residual: " << __print_bool(use_real_residual) << std::endl;
-            std::cout << "||  |==basis_size: " << basis_size << std::endl;                
             std::cout << "||  |==save_convergence_history: " << __print_bool(save_convergence_history) << std::endl;
             std::cout << "||  |==divide_out_norms_by_rel_base: " << __print_bool(divide_out_norms_by_rel_base) << std::endl;
+            std::cout << "||  |==verbose: " << __print_bool(verbose) << std::endl;
+            bicgstabl.plot_all();
+            bicgstab.plot_all();
+            gmres.plot_all();
         }            
     };
 
     struct matrix
     {
         std::string file_name = "none";
+        std::vector<std::string> prec_file_names = {"none"};
         void plot_all()
         {
             std::cout << "||  |==file_name: " << file_name << std::endl;
+            if(prec_file_names[0] != "none")
+            {
+                for(auto &x: prec_file_names)
+                {
+                    std::cout << "||  |==preconditioner_file_name: " << x << std::endl;
+                }
+            }
         }
     };
 
 
-    bool use_high_precision = false;
     std::string convergence_file_name = "none";
     std::string condition_number_file_name = "none";
-
+    std::string log_file_name = "none";
     device device_c;
     linear_solver linear_solver_c;
     matrix matrix_c;
     void plot_all()
     {
         std::cout << "CONFIGURATION:" << std::endl;
-        std::cout << "||use_high_precision: " << __print_bool(use_high_precision) << std::endl;
         std::cout << "||convergence_file_name: " << convergence_file_name << std::endl;
         std::cout << "||condition_number_file_name: " << condition_number_file_name << std::endl;
+        std::cout << "||log_file_name: " << log_file_name << std::endl;
         std::cout << "||device:" << std::endl;
         device_c.plot_all();
         std::cout << "||linear solver:" << std::endl;
@@ -129,34 +187,130 @@ using holder_t = holder;
  
 void from_json(const nlohmann::json &j, holder_t::device &params_device_)
 {
+    int pci_id_ = -1;
+    unsigned int threads_ = 1;
+    try
+    {
+        pci_id_ = j.at("pci_id").get<int>();
+        threads_ = j.at("threads").get<unsigned int>();
+    }
+    catch(const nlohmann::json::exception &exception)
+    {
+        std::cout << exception.what() << "...continuing." << std::endl;
+    }
+
     params_device_ = holder_t::device
     {
         j.at("type").get<std::string>(),
-        j.at("pci_id").get<int>(),
-        j.at("threads").get<unsigned int>()
+        pci_id_,
+        threads_
     };
 }
 
+
+
+void from_json(const nlohmann::json &j, holder_t::linear_solver::bicgstab_c& params_bicgstab_)
+{
+    params_bicgstab_ =  holder_t::linear_solver::bicgstab_c
+    {
+        true,
+        j.at("maximum_iterations").get<unsigned int>()
+    };
+
+}
+void from_json(const nlohmann::json &j, holder_t::linear_solver::bicgstabl_c& params_bicgstabl_)
+{
+    params_bicgstabl_ =  holder_t::linear_solver::bicgstabl_c
+    {
+        true,
+        j.at("maximum_iterations").get<unsigned int>(),
+        j.at("basis_size").get<unsigned int>()
+    };
+
+}
+void from_json(const nlohmann::json &j, holder_t::linear_solver::gmres_c& params_gmres_)
+{
+    params_gmres_ =  holder_t::linear_solver::gmres_c
+    {
+        true,
+        j.at("maximum_iterations").get<unsigned int>(),
+        j.at("restarts").get<unsigned int>(),
+        j.at("reorthogonalization").get<bool>()
+    };
+
+}
 void from_json(const nlohmann::json &j, holder_t::linear_solver& params_lse_)
 {
+    
+    bool none_set_error_ = true;
+    holder_t::linear_solver::bicgstab_c bicgstab_loc;
+    try
+    {
+        bicgstab_loc = j.at("bicgstab").get< holder_t::linear_solver::bicgstab_c >();
+        none_set_error_ = false;
+    }
+    catch(const nlohmann::json::exception &exception)
+    {
+        std::cout << exception.what() << "...continuing." << std::endl;
+    }
+    holder_t::linear_solver::bicgstabl_c bicgstabl_loc;
+    try
+    {
+        bicgstabl_loc = j.at("bicgstabl").get< holder_t::linear_solver::bicgstabl_c >();
+        none_set_error_ = false;
+    }
+    catch(const nlohmann::json::exception &exception)
+    {
+        std::cout << exception.what() << "...continuing." << std::endl;
+    }
+    holder_t::linear_solver::gmres_c gmres_loc;
+    try
+    {
+        gmres_loc = j.at("gmres").get< holder_t::linear_solver::gmres_c >();
+        none_set_error_ = false;
+    }
+    catch(const nlohmann::json::exception &exception)
+    {
+        std::cout << exception.what() << "...continuing." << std::endl;
+    }
+    if(none_set_error_)
+    {
+        throw std::logic_error("not a singe linear solver is provided!");
+    }
+
     params_lse_ = holder_t::linear_solver
     {
-        j.at("name").get<std::string>(),
-        j.at("maximum_iterations").get<unsigned int>(),
         j.at("relative_tolerance").get<double>(),
         j.at("use_preconditioned_residual").get<bool>(),
         j.at("use_real_residual").get<bool>(),
-        j.at("basis_size").get<unsigned int>(),
         j.at("save_convergence_history").get<bool>(),
-        j.at("divide_norms_by_relative_base").get<bool>()
+        j.at("divide_norms_by_relative_base").get<bool>(),
+        j.at("verbose").get<bool>(),
+        bicgstab_loc,
+        bicgstabl_loc,
+        gmres_loc
     };
 }
 
 void from_json(const nlohmann::json &j, holder_t::matrix &params_mat_)
 {
+    
+    std::string lin_op_f_n = "none";
+    std::vector<std::string> prec_f_n = {"none"};
+    try
+    {
+        lin_op_f_n = j.at("file_name").get<std::string>();
+        prec_f_n = j.at("preconditioners").get< std::vector<std::string> >();
+    }
+    catch(const nlohmann::json::exception &exception)
+    {
+        std::cout << exception.what() << "...continuing." << std::endl;
+    }
+
     params_mat_ = holder_t::matrix
     {
-        j.at("file_name").get<std::string>()        
+        lin_op_f_n,
+        prec_f_n      
     };
 }
 
@@ -164,9 +318,9 @@ void from_json(const nlohmann::json &j, holder_t &params_)
 {
     params_ = holder_t
     {
-        j.at("use_high_precision").get<bool>(),
         j.at("convergence_file_name").get<std::string>(),
         j.at("condition_number_file_name").get<std::string>(),
+        j.at("log_file_name").get<std::string>(),
         j.at("device").get< holder_t::device >(),
         j.at("linear_solver").get< holder_t::linear_solver >(),    
         j.at("matrix").get< holder_t::matrix >()

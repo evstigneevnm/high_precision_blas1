@@ -1,5 +1,5 @@
-#ifndef __CSR__PRECONDITIONER_H__
-#define __CSR__PRECONDITIONER_H__
+#ifndef __CSR__GPU_ILU0_PRECONDITIONER_H__
+#define __CSR__GPU_ILU0_PRECONDITIONER_H__
 
 #include <stdexcept>
 
@@ -7,18 +7,19 @@
 namespace csr
 {
 template<class VectorOperations, class LinearOperator, class Matrix>
-struct preconditioner
+struct gpu_ilu0_preconditioner
 {
     using T = typename VectorOperations::scalar_type;
     using T_vec = typename VectorOperations::vector_type;
 
-    preconditioner(const VectorOperations* vec_ops_):
+    gpu_ilu0_preconditioner(const VectorOperations* vec_ops_):
     vec_ops(vec_ops_)
     {
         vec_ops->init_vector(y); vec_ops->start_use_vector(y);
     }
-    ~preconditioner()
+    ~gpu_ilu0_preconditioner()
     {
+        if(mat != nullptr) delete mat;
         vec_ops->stop_use_vector(y); vec_ops->free_vector(y);
     }
 
@@ -27,11 +28,9 @@ struct preconditioner
         lin_op = lin_op_;
         operator_set = true;
     }
-
-    void set_matrix(const Matrix* matL_, const Matrix* matU_)
+    void set_matrix(const Matrix matP_)
     {
-        matU = matU_;
-        matL = matL_;
+        mat = new Matrix(matP_);
         matrix_set = true;
     }
 
@@ -45,8 +44,6 @@ struct preconditioner
         else
         {
             vec_ops->assign(x, y);
-            matL->triangular_solve_lower(x, y);
-            matU->triangular_solve_upper(y, x);
             
         }
     }
@@ -56,8 +53,8 @@ private:
     bool matrix_set = false;
     const VectorOperations* vec_ops;
     const LinearOperator* lin_op;
-    const Matrix* matL;
-    const Matrix* matU;    
+    Matrix* mat = nullptr;
+    
 
 };
 }

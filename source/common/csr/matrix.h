@@ -34,8 +34,21 @@ public:
     matrix(int nnz_, int size_col_, int size_row_, int matrix_columns_, int matrix_rows_, Add4VectorOpperations* addition_gpu_param_= 0):
     addition_gpu_param(addition_gpu_param_)
     {
-        init(nnz_, size_col_, size_row_, matrix_columns_, matrix_rows_);
-    }   
+        init(nnz_, size_col_, size_row_);
+    }
+    //copy constructor
+    matrix(const matrix& m_)
+    {
+        addition_gpu_param = m_.addition_gpu_param;
+        dim.columns = m_.dim.columns;
+        dim.rows = m_.dim.rows;
+        nnz = m_.nnz;
+        size_col = m_.size_col;
+        size_row = m_.size_row;
+        init(nnz, size_col, size_row);
+        set(m_.data, m_.col_ind, m_.row_ptr);
+
+    }
     ~matrix()
     {
      
@@ -78,7 +91,7 @@ public:
         }
     }
 
-    dimensions_t get_dim()
+    dimensions_t get_dim()const
     {
         return(dim);
     }
@@ -102,8 +115,6 @@ public:
         init(nnz_, size_col_, size_row_);
         set(data_, col_ind_, row_ptr_);
     }
-
-
 
 protected:
     T_vec data = nullptr;

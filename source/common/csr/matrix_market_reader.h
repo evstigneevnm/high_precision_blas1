@@ -22,7 +22,7 @@
 namespace csr
 {
 
-template<class T, class Ord = size_t>
+template<class T, class Ord = int>
 class matrix_market_reader
 {
 private:
@@ -229,8 +229,9 @@ public:
         {
             throw std::runtime_error("csr::matrix_market_reader::read_file: error while opening file");
         }
+        print_log("using file: " + file_name_);
         read_banner(fin);
-        if(!std::is_same<T, T_real>::value)
+        if( (std::is_same<T, T_real>::value)&&(banner.type == "complex"))
         {
             throw std::runtime_error("csr::matrix_market_reader::read_file: real data type used for a complex matrix. This will be fixed later." );
         }        
@@ -277,7 +278,9 @@ public:
             while( num_entries_read < num_entries && !fin.eof() )
             {
                 node node_l;
-                fin >> node_l.row >> node_l.col >> node_l.val;
+                double val_;
+                fin >> node_l.row >> node_l.col >> val_;
+                node_l.val = T(val_);
                 coo_mat.data.push_back(node_l);
                 if(num_entries_read%(num_entries_ref) == 0)
                 {

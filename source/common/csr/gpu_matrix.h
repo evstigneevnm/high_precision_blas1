@@ -5,17 +5,16 @@
 #include <common/csr/matrix.h>
 #include <common/csr/gpu_vectors_ordinal.h>
 #include <utils/cuda_safe_call.h>
-#include <utils/cusparse_safe_call.h>
 #include <utils/cuda_support.h>
+#include <external_libraries/cusparse_wrap.h>
 #include <library_types.h>
-#include <cusparse.h>
 #include <thrust/complex.h>
 #include <type_traits>
 
 namespace csr
 {
 
-template<class VectorOperations, class CudaBlas, class Ordinal = size_t>
+template<class VectorOperations, class CudaBlas, class Ordinal = int>
 class gpu_matrix: public matrix<VectorOperations, gpu_vectors_ordinal<Ordinal>, CudaBlas>
 {
 private:
@@ -24,7 +23,7 @@ private:
     using T_vec = typename parent_t::T_vec;
     using I = typename gpu_vectors_ordinal<Ordinal>::scalar_type;
     using I_vec = typename gpu_vectors_ordinal<Ordinal>::vector_type;
-
+    cusparse_wrap csw;
 
     cusparseIndexType_t cusparse_ordinal()const
     {
@@ -70,28 +69,26 @@ public:
     
     gpu_matrix(CudaBlas* cublas_): parent_t(cublas_)
     {
-        if(handle == 0)
-        {
-            cusparseCreate(&handle);
-        }        
+        
     }
 
-    gpu_matrix(int nnz_, int size_col_, int size_row_, CudaBlas* cublas_): parent_t(nnz_, size_col_, size_row_, cublas_)
+    gpu_matrix(int nnz_, int size_col_, int size_row_, CudaBlas* cublas_): 
+    parent_t(nnz_, size_col_, size_row_, cublas_)
     {
-        if(handle == 0)
-        {
-            CUSPARSE_SAFE_CALL( cusparseCreate(&handle) );
-        }
+
     }    
+
+    gpu_matrix(const gpu_matrix& m_): parent_t(m_)
+    {
+        init_cusparse();
+    }
+
     ~gpu_matrix()
     {
+        
         if(mat != 0)
         {
             cusparseDestroySpMat(mat);
-        }
-        if(handle != 0)
-        {
-            cusparseDestroy(handle);
         }
 
     }
@@ -108,9 +105,187 @@ public:
         }
         
         init_cusparse();
-
     }
 
+    
+    /**
+     * @brief      { solves a lower triangluar linear system: L x = alpha*y, where L has a unit diagonal }
+     *
+     * @param[in]  alpha_  right hand side scale constant
+     * @param[in]  b_      { right hand side vector }
+     * @param      x_      { solution }
+     * @param      transoise_ true for transposed operation of L
+     */
+    void triangular_solve_lower(const T_vec& b_, T_vec& x_, const T& alpha_ = T(1.0), bool transpose_ = false)const
+    {
+        cusparseDnVecDescr_t vecX, vecY;
+        cusparseOperation_t is_transpose;
+        int structural_zero;
+        int numerical_zero;
+        if(transpose_)
+        {
+            is_transpose = CUSPARSE_OPERATION_TRANSPOSE;
+        }
+        else
+        {
+            is_transpose = CUSPARSE_OPERATION_NON_TRANSPOSE;
+        }
+        cusparseMatDescr_t descr = 0;
+        csrsv2Info_t info = 0;
+
+        CUSPARSE_SAFE_CALL( cusparseCreateMatDescr(&descr) );
+        CUSPARSE_SAFE_CALL( cusparseSetMatFillMode(descr, CUSPARSE_FILL_MODE_LOWER) );
+        CUSPARSE_SAFE_CALL( cusparseSetMatIndexBase(descr, CUSPARSE_INDEX_BASE_ZERO) );
+        CUSPARSE_SAFE_CALL( cusparseSetMatDiagType(descr, CUSPARSE_DIAG_TYPE_UNIT) );
+
+        CUSPARSE_SAFE_CALL( cusparseCreateCsrsv2Info(&info) );
+        int pBufferSize = 0;
+        csw.cusparse_csrsv2_bufferSize
+        (
+            is_transpose,
+            parent_t::get_dim().columns,
+            parent_t::nnz,
+            descr,
+            parent_t::data, parent_t::row_ptr, parent_t::col_ind,
+            info,
+            &pBufferSize
+        );
+        
+        void* pBuffer = NULL;
+        CUDA_SAFE_CALL
+        (
+            cudaMalloc((void**)&pBuffer, pBufferSize)
+        );    
+        csw.cusparse_csrsv2_analysis
+        (
+            is_transpose,
+            parent_t::get_dim().columns,
+            parent_t::nnz,
+            descr,
+            parent_t::data, parent_t::row_ptr, parent_t::col_ind,
+            info, 
+            CUSPARSE_SOLVE_POLICY_USE_LEVEL,
+            pBuffer
+        );
+      
+        cusparseStatus_t status = csw.cusparse_csrsv2_zeroPivot(info, &structural_zero);
+        if (CUSPARSE_STATUS_ZERO_PIVOT == status)
+        {
+            printf("L(%d,%d) is missing i.e. exactly zero.\n", structural_zero, structural_zero);
+        }
+        csw.cusparse_csrsv2_solve
+        (
+            is_transpose,
+            parent_t::get_dim().columns,
+            parent_t::nnz,
+            (T*)&alpha_, 
+            descr,
+            parent_t::data, parent_t::row_ptr, parent_t::col_ind,
+            info,
+            (T_vec)b_, x_, 
+            CUSPARSE_SOLVE_POLICY_USE_LEVEL,
+            pBuffer
+        );
+        
+        // L has unit diagonal, so no numerical zero is suposed to be reported.
+        status = csw.cusparse_csrsv2_zeroPivot(info, &numerical_zero);
+        if (CUSPARSE_STATUS_ZERO_PIVOT == status)
+        {
+            printf("L(%d,%d) is numerically zero\n", numerical_zero, numerical_zero);
+        }
+        CUDA_SAFE_CALL( cudaFree(pBuffer) );
+        CUSPARSE_SAFE_CALL( cusparseDestroyCsrsv2Info(info) );
+        CUSPARSE_SAFE_CALL( cusparseDestroyMatDescr(descr)  ); 
+    }
+
+
+
+    /**
+     * @brief      { solves an upper triangluar linear system: U x = alpha*y}
+     *
+     * @param[in]  alpha_  right hand side scale constant
+     * @param[in]  b_      { right hand side vector }
+     * @param      x_      { solution }
+     * @param      transoise_ true for transposed operation of U
+     */
+    void triangular_solve_upper(const T_vec& b_, T_vec& x_, const T& alpha_ = T(1.0), bool transpose_ = false)const
+    {
+        cusparseDnVecDescr_t vecX, vecY;
+        cusparseOperation_t is_transpose;
+        int structural_zero;
+        int numerical_zero;
+        if(transpose_)
+        {
+            is_transpose = CUSPARSE_OPERATION_TRANSPOSE;
+        }
+        else
+        {
+            is_transpose = CUSPARSE_OPERATION_NON_TRANSPOSE;
+        }
+        cusparseMatDescr_t descr = 0;
+        csrsv2Info_t info = 0;
+
+        CUSPARSE_SAFE_CALL( cusparseCreateMatDescr(&descr) );
+        CUSPARSE_SAFE_CALL( cusparseSetMatFillMode(descr, CUSPARSE_FILL_MODE_UPPER) );
+        CUSPARSE_SAFE_CALL( cusparseSetMatIndexBase(descr, CUSPARSE_INDEX_BASE_ZERO) );
+
+        CUSPARSE_SAFE_CALL( cusparseCreateCsrsv2Info(&info) );
+        int pBufferSize = 0;
+        csw.cusparse_csrsv2_bufferSize
+        ( 
+            is_transpose, 
+            parent_t::get_dim().columns,
+            parent_t::nnz, 
+            descr,
+            parent_t::data, parent_t::row_ptr, parent_t::col_ind,
+            info,
+            &pBufferSize
+        );
+        void* pBuffer = NULL;
+        CUDA_SAFE_CALL
+        (
+            cudaMalloc((void**)&pBuffer, pBufferSize)
+        );
+        csw.cusparse_csrsv2_analysis
+        (
+            is_transpose,
+            parent_t::get_dim().columns,
+            parent_t::nnz,
+            descr,
+            parent_t::data, parent_t::row_ptr, parent_t::col_ind,
+            info, 
+            CUSPARSE_SOLVE_POLICY_USE_LEVEL,
+            pBuffer
+        );       
+        cusparseStatus_t status = csw.cusparse_csrsv2_zeroPivot(info, &structural_zero);
+        if (CUSPARSE_STATUS_ZERO_PIVOT == status)
+        {
+            printf("U(%d,%d) is missing i.e. exactly zero.\n", structural_zero, structural_zero);
+        }
+        csw.cusparse_csrsv2_solve
+        (
+            is_transpose,
+            parent_t::get_dim().columns,
+            parent_t::nnz,
+            (T*)&alpha_, 
+            descr,
+            parent_t::data, parent_t::row_ptr, parent_t::col_ind,
+            info,
+            (T_vec)b_, x_, 
+            CUSPARSE_SOLVE_POLICY_USE_LEVEL,
+            pBuffer
+        );
+        
+        status = csw.cusparse_csrsv2_zeroPivot(info, &numerical_zero);
+        if (CUSPARSE_STATUS_ZERO_PIVOT == status)
+        {
+            printf("U(%d,%d) is numerically zero\n", numerical_zero, numerical_zero);
+        }
+        CUDA_SAFE_CALL( cudaFree(pBuffer) );
+        CUSPARSE_SAFE_CALL( cusparseDestroyCsrsv2Info(info) );
+        CUSPARSE_SAFE_CALL( cusparseDestroyMatDescr(descr)  );
+ 
+    }
 
     /**
      * @brief      { y <- \alphaAx + \beta y }
@@ -147,7 +322,7 @@ public:
         ( 
             cusparseSpMV_bufferSize
             (
-                handle, 
+                csw.handle, 
                 is_transpose,
                 &alpha_, mat, vecX, &beta_, vecY, cusparse_real(),
                 CUSPARSE_MV_ALG_DEFAULT, &bufferSize) 
@@ -161,7 +336,7 @@ public:
         ( 
             cusparseSpMV
             (
-                handle, 
+                csw.handle, 
                 is_transpose,
                 &alpha_, mat, vecX, &beta_, vecY, cusparse_real(),
                 CUSPARSE_MV_ALG_DEFAULT, dBuffer) 
@@ -176,7 +351,7 @@ public:
 
     }
 private:
-    cusparseHandle_t handle = 0;
+
     cusparseSpMatDescr_t mat = 0;
 
     void init_cusparse()

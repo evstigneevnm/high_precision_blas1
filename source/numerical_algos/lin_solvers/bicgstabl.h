@@ -20,6 +20,7 @@
 #include <stdexcept>
 #include <cmath>
 #include <numerical_algos/detail/vectors_arr_wrap_static.h>
+#include <numerical_algos/lin_solvers/detail/complex_calls_wrap.h>
 #include "detail/monitor_call_wrap.h"
 #include "iter_solver_base.h"
 
