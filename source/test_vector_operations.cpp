@@ -13,7 +13,7 @@
 #include <high_prec/dot_product_cump.hpp>
 #include <high_prec/sum_gmp.hpp>
 #include <common/gpu_reduction.h>
-#include <common/testing/gpu_reduction_ogita.h>
+#include <common/ogita/gpu_reduction_ogita.h>
 #include <generate_vector_pair.hpp>
 #include <chrono>
 

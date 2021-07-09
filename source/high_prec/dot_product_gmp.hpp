@@ -16,18 +16,18 @@ class dot_product_gmp
 {
 private:
     using cump_t = dot_product_cump<T, T_vec>;
-    T_vec X;
-    T_vec Y;
-    bool array_set = false;
-    bool gpu = false;
-    unsigned int exact_prec_bits;
-    size_t N;
+    mutable T_vec X;
+    mutable T_vec Y;
+    mutable bool array_set = false;
+    mutable bool gpu = false;
+    mutable unsigned int exact_prec_bits;
+    mutable size_t N;
     cump_t* cump_class = nullptr;
 
-    mpf_class s_m;
-    T dot_naive_v;
-    T dot_ogita_v;
-    T dot_fma_v;
+    mutable mpf_class s_m;
+    mutable T dot_naive_v;
+    mutable T dot_ogita_v;
+    mutable T dot_fma_v;
 
 
 public:
@@ -60,7 +60,7 @@ public:
         gpu = false;
     }
 
-    void set_arrays(size_t N_, T_vec& input_array_1_, T_vec& input_array_2_)
+    void set_arrays(size_t N_, T_vec input_array_1_, T_vec input_array_2_) const
     {
         if(gpu)
         {
@@ -81,7 +81,7 @@ public:
         }
     }
 
-    T dot_exact()
+    T dot_exact() const
     {
 
         

@@ -14,7 +14,7 @@
 #include <high_prec/dot_product_gmp.hpp>
 #include <high_prec/asum_gmp_complex.hpp>
 #include <common/gpu_reduction.h>
-#include <common/testing/gpu_reduction_ogita.h>
+#include <common/ogita/gpu_reduction_ogita.h>
 #include <generate_vector_pair_complex.hpp>
 #include <chrono>
 #include <thrust/complex.h>

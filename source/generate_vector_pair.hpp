@@ -159,6 +159,10 @@ public:
     }
 
 
+    T condition_number_max(T_vec x1_, T_vec x2_)
+    {
+        return(estimate_condition_reduction(x1_, x2_));
+    }
 
 private:
 
@@ -178,7 +182,6 @@ private:
 
     T estimate_condition_reduction(T_vec x1_, T_vec x2_)
     {
-        
         
         vec_helper->convert_vector_T_to_double(x1_, x1_double_a_);
         vec_helper->convert_vector_T_to_double(x2_, x2_double_a_);

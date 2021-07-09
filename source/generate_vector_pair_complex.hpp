@@ -444,6 +444,13 @@ public:
         return(abs_dot);
     }
 
+
+    TR condition_number_max(T_vec x1_, T_vec x2_) const
+    {
+        auto cn = estimate_condition_reduction(x1_, x2_);
+        return(std::max(cn.first, cn.second));
+    }
+
 private:
 
     VectorOperations* vec_ops;
@@ -461,9 +468,9 @@ private:
 
     vec_helper_t* vec_helper = nullptr;
 
-    T abs_dot = T(0,0);
+    mutable T abs_dot = T(0,0);
 
-    std::pair<TR,TR> estimate_condition_reduction(T_vec x1_, T_vec x2_)
+    std::pair<TR,TR> estimate_condition_reduction(T_vec x1_, T_vec x2_) const
     {
         
         
@@ -491,7 +498,7 @@ private:
         return( std::pair<TR,TR>(cond_re, cond_im) );
     }
 
-    T dot(double* x1_r, double* x2_r, double* x1_i, double* x2_i)
+    T dot(double* x1_r, double* x2_r, double* x1_i, double* x2_i) const
     {
         TR RR = dot_real(x1_r, x2_r);
         TR II = dot_real(x1_i, x2_i);
@@ -507,7 +514,7 @@ private:
 
 
 
-    TR dot_real(double* d1, double* d2)
+    TR dot_real(double* d1, double* d2) const
     {
         TR res = 0;
         if(use_exact_dot == 1)

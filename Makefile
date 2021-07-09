@@ -56,7 +56,7 @@ reduction_kern:
 	$(NVCC) $(NVCCFLAGS) $(IPROJECT) source/common/gpu_reduction_kernels.cu -c -o ./cuda_reduction_kers.o
 
 reduction_ogita_kern:
-	$(NVCC) $(NVCCFLAGS) $(IPROJECT) source/common/testing/gpu_reduction_ogita_kernels.cu -c -o ./cuda_reduction_ogita_kers.o
+	$(NVCC) $(NVCCFLAGS) $(IPROJECT) source/common/ogita/gpu_reduction_ogita_kernels.cu -c -o ./cuda_reduction_ogita_kers.o
 
 cump_kern:
 	$(NVCC) -Wno-deprecated-declarations $(NVCCFLAGS) $(IPROJECT) $(ICUMP) source/high_prec/cump_blas_kernels.cu -c -o ./cump_kers.o
@@ -92,9 +92,16 @@ mat_csr_D:
 	$(NVCC) $(DTYPE) $(NVCCFLAGS) $(IPROJECT) $(ICUDA) source/test_csr_matrix.cpp $(LCUDA) $(LIBS1) $(LIBCUSPARSE) gpu_vec_kers.o cuda_reduction_ogita_kers.o cuda_reduction_kers.o -o test_csr_matrix.bin
 mat_pointers_D:
 	$(NVCC) $(DTYPE) $(NVCCFLAGS) $(IPROJECT) $(ICUDA) source/test_csr_matrix_pointers.cu $(LCUDA) $(LIBS1) $(LIBCUSPARSE) -o test_csr_matrix_pointers.bin
+
 lin_solver_csr_D:
 	$(NVCC) $(DTYPE) $(NVCCFLAGS) $(IPROJECT) $(ICUDA) source/test_csr_linear_solver.cpp $(LCUDA) $(LIBS1) $(LIBCUSPARSE) gpu_vec_kers.o cuda_reduction_ogita_kers.o cuda_reduction_kers.o -o test_csr_linear_solver_D.bin
 lin_solver_csr_F:
-	$(NVCC) $(FTYPE) $(NVCCFLAGS) $(IPROJECT) $(ICUDA) source/test_csr_linear_solver.cpp $(LCUDA) $(LIBS1) $(LIBCUSPARSE) gpu_vec_kers.o cuda_reduction_ogita_kers.o cuda_reduction_kers.o -o test_csr_linear_solver_F.bin
+	$(NVCC) $(FTYPE) $(NVCCFLAGS) $(IPROJECT) $(ICUDA) source/test_csr_linear_solver.cpp $(LCUDA) $(LIBS1) $(LIBCUSPARSE)  gpu_vec_kers.o cuda_reduction_ogita_kers.o cuda_reduction_kers.o -o test_csr_linear_solver_F.bin
+
+condC_lin_solver_csr_D:
+	$(NVCC) $(DTYPE) $(NVCCFLAGS) $(IPROJECT) $(ICUDA) $(IGMP) $(ICUMP) source/test_csr_linear_solver_cond_complex.cpp $(LCUDA) $(LIBS2) $(LIBCUSPARSE) $(LGMP) $(LCUMP) gpu_vec_kers.o cuda_reduction_ogita_kers.o cuda_reduction_kers.o cump_kers.o cuda_helper_kers_complex.o -o test_csr_linear_solver_cond_Z.bin
+condC_lin_solver_csr_F:
+	$(NVCC) $(FTYPE) $(NVCCFLAGS) $(IPROJECT) $(ICUDA) $(IGMP) $(ICUMP) source/test_csr_linear_solver_cond_complex.cpp $(LCUDA) $(LIBS2) $(LIBCUSPARSE) $(LGMP) $(LCUMP) gpu_vec_kers.o cuda_reduction_ogita_kers.o cuda_reduction_kers.o cump_kers.o cuda_helper_kers_complex.o -o test_csr_linear_solver_cond_C.bin
+
 
 

@@ -10,7 +10,7 @@
 #include <common/gpu_vector_operations.h>
 #include <common/cpu_vector_operations.h>
 #include <common/threaded_reduction.h>
-#include <common/testing/gpu_reduction_ogita.h>
+#include <common/ogita/gpu_reduction_ogita.h>
 #include <high_prec/dot_product_gmp.hpp>
 #include <common/gpu_reduction.h>
 #include <generate_vector_pair.hpp>
