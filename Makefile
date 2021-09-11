@@ -13,12 +13,12 @@ LIBFLAGS = --compiler-options -fPIC
 GCCFLAGS = $(TARGET) -std=$(CPP_STANDARD)
 ICUDA = -I/usr/local/cuda/include
 IPROJECT = -I source/
-IBOOST = -I/home/noctum/boost_1_70/include/
+IBOOST = -I/opt/boost/include/
 IGMP = -I/opt/gmp/include
 ICUMP = -I/opt/cump/include
 
 LCUDA = -L/usr/local/cuda/lib64
-LBOOST = -L/home/noctum/boost_1_70/lib/
+LBOOST = -L/opt/boost/lib/
 LIBS1 = -lcublas -lcurand 
 LIBS2 = -lcufft -lcublas -lcurand 
 LIBCUSPARSE = -lcusparse
